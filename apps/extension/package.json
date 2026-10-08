@@ -1,0 +1,12 @@
+{
+  "name": "@reelmind/extension",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.4",
+    "typescript": "latest"
+  }
+}

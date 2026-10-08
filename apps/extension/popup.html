@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>SuperSave</title>
+    <style>
+        body {
+            margin: 0;
+            width: 320px;
+            background: #0d0a12;
+            color: #f7f2fa;
+            font-family: Inter, system-ui, sans-serif;
+            padding: 18px
+        }
+
+        .brand {
+            font-weight: 800;
+            display: flex;
+            gap: 8px;
+            align-items: center
+        }
+
+        .mark {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #c38bff, #7e49df)
+        }
+
+        .eyebrow {
+            font-size: 10px;
+            letter-spacing: .14em;
+            color: #817984;
+            margin-top: 24px
+        }
+
+        .page {
+            margin: 7px 0 16px;
+            color: #a7a0ac;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .button {
+            width: 100%;
+            border: 0;
+            border-radius: 9px;
+            padding: 12px;
+            cursor: pointer;
+            font-weight: 800
+        }
+
+        .save {
+            background: linear-gradient(135deg, #ba82ff, #8752e9);
+            color: white
+        }
+
+        .open {
+            margin-top: 8px;
+            background: #18141e;
+            border: 1px solid #2e2736;
+            color: #ddd
+        }
+
+        .status {
+            min-height: 16px;
+            color: #bb97df;
+            font-size: 11px;
+            margin-top: 10px
+        }
+    </style>
+</head>
+
+<body>
+    <div class="brand">
+        <div class="mark">S</div>SuperSave
+    </div>
+    <div class="eyebrow">CURRENT PAGE</div>
+    <div id="page" class="page">Detecting…</div><button id="save" class="button save">Save to SuperSave</button><button
+        id="open" class="button open">Open knowledge library</button>
+    <div id="status" class="status"></div>
+    <script src="dist/popup.js"></script>
+</body>
+
+</html>

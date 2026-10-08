@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "SuperSave — Save to Knowledge",
+  "version": "0.1.0",
+  "description": "Quickly save Instagram, YouTube, and web content to SuperSave.",
+  "permissions": ["storage", "contextMenus", "tabs", "activeTab"],
+  "host_permissions": ["http://localhost:4000/*", "http://127.0.0.1:4000/*", "<all_urls>"],
+  "action": {
+    "default_title": "Save to SuperSave",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://instagram.com/*",
+        "https://www.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon.svg",
+    "48": "icon.svg",
+    "128": "icon.svg"
+  }
+}

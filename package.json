@@ -1,0 +1,13 @@
+{
+  "name": "@super-save/web",
+  "private": true,
+  "workspaces": ["apps/web", "apps/extension", "services/api"],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace services/api run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "build:extension": "npm --workspace apps/extension run build",
+    "typecheck": "npm --workspaces run typecheck"
+  },
+  "engines": {"node": ">=20.9.0"}
+}
