@@ -14,6 +14,22 @@ def detect_source(url: str) -> str:
         return "YouTube"
     return "Web"
 
+def get_embed_url(url: str) -> Optional[str]:
+    """Generates a clean embeddable player URL for YouTube or Instagram."""
+    # YouTube (regular, shorts, youtu.be)
+    yt_match = re.search(r'(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})', url)
+    if yt_match:
+        video_id = yt_match.group(1)
+        return f"https://www.youtube.com/embed/{video_id}?enablejsapi=1"
+
+    # Instagram Reels
+    ig_match = re.search(r'instagram\.com\/(?:reel|p)\/([a-zA-Z0-9_-]+)', url)
+    if ig_match:
+        code = ig_match.group(1)
+        return f"https://www.instagram.com/reel/{code}/embed"
+
+    return None
+
 def fetch_youtube_oembed(url: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Fetch video title, author, and thumbnail via YouTube's official oEmbed endpoint."""
     try:
@@ -66,8 +82,9 @@ def fetch_page_metadata(url: str) -> Tuple[Optional[str], Optional[str], Optiona
         return None, None, None
 
 def get_fast_metadata(url: str) -> FastMetadataResponse:
-    """Instantly extracts high-level metadata (title, platform, thumbnail) in <400ms."""
+    """Instantly extracts high-level metadata (title, platform, thumbnail, embed) in <400ms."""
     source = detect_source(url)
+    embed_url = get_embed_url(url)
     parsed = urllib.parse.urlparse(url)
     domain = parsed.netloc.replace("www.", "")
 
@@ -80,6 +97,7 @@ def get_fast_metadata(url: str) -> FastMetadataResponse:
                 thumbnail=yt_thumb,
                 category="Video Content",
                 source=source,
+                embed_url=embed_url
             )
 
     # General / Instagram fallback
@@ -101,5 +119,6 @@ def get_fast_metadata(url: str) -> FastMetadataResponse:
         author=domain,
         thumbnail=thumbnail,
         category=category,
-        source=source
+        source=source,
+        embed_url=embed_url
     )

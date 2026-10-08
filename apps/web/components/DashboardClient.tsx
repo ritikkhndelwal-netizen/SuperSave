@@ -12,6 +12,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   const [url, setUrl] = useState('');
   const [message, setMessage] = useState('');
   const [extractionMode, setExtractionMode] = useState<'video_lowres' | 'audio_fast'>('video_lowres');
+  const [searchMode, setSearchMode] = useState<'library' | 'web'>('library');
 
   // Load user preference for extraction mode from localStorage
   useEffect(() => {
@@ -143,8 +144,28 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search your saved knowledge…"
+            placeholder={
+              searchMode === 'web'
+                ? 'Search your library + explore web & YouTube…'
+                : 'Search your saved knowledge…'
+            }
           />
+        </div>
+        <div className="search-mode-pill-group">
+          <button
+            type="button"
+            className={`search-mode-pill ${searchMode === 'library' ? 'active' : ''}`}
+            onClick={() => setSearchMode('library')}
+          >
+            📚 My Library
+          </button>
+          <button
+            type="button"
+            className={`search-mode-pill ${searchMode === 'web' ? 'active' : ''}`}
+            onClick={() => setSearchMode('web')}
+          >
+            🌐 Library + Web Search
+          </button>
         </div>
         <div className="chip-row">
           {categories.map((item) => (
@@ -205,6 +226,69 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
           </Link>
         ))}
       </section>
+
+      {searchMode === 'web' && query.trim() && (
+        <section className="web-discovery-section">
+          <div className="web-discovery-header">
+            <div>
+              <span className="source-pill" style={{ position: 'static', display: 'inline-block', marginBottom: '8px' }}>
+                🌐 Live Discovery & External Knowledge
+              </span>
+              <h3 style={{ margin: '4px 0', fontSize: '18px', letterSpacing: '-0.02em' }}>
+                Explore beyond your library for &ldquo;{query.trim()}&rdquo;
+              </h3>
+              <p className="muted" style={{ margin: 0, fontSize: '12px' }}>
+                Search Google, YouTube, and academic literature, or capture new items directly into SuperSave.
+              </p>
+            </div>
+            <button
+              className="primary-button"
+              style={{ fontSize: '12px', padding: '9px 15px' }}
+              onClick={() => {
+                setUrl(`https://www.google.com/search?q=${encodeURIComponent(query.trim())}`);
+                setShowAdd(true);
+              }}
+            >
+              + Save Link
+            </button>
+          </div>
+
+          <div className="web-discovery-grid">
+            <a
+              href={`https://www.google.com/search?q=${encodeURIComponent(query.trim())}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="discovery-card"
+            >
+              <h4>🔍 Google Web Search</h4>
+              <p>Find articles, documentation, tutorials, and latest discussions on &ldquo;{query.trim()}&rdquo;.</p>
+              <span style={{ fontSize: '11px', color: '#ba82ff', fontWeight: 600 }}>Explore on Google ↗</span>
+            </a>
+
+            <a
+              href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query.trim())}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="discovery-card"
+            >
+              <h4>▶️ YouTube Videos & Shorts</h4>
+              <p>Find video tutorials, breakdowns, lectures, and reels covering &ldquo;{query.trim()}&rdquo;.</p>
+              <span style={{ fontSize: '11px', color: '#ba82ff', fontWeight: 600 }}>Explore on YouTube ↗</span>
+            </a>
+
+            <a
+              href={`https://scholar.google.com/scholar?q=${encodeURIComponent(query.trim())}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="discovery-card"
+            >
+              <h4>🎓 Google Scholar</h4>
+              <p>Research papers, citations, academic articles, and scientific studies on &ldquo;{query.trim()}&rdquo;.</p>
+              <span style={{ fontSize: '11px', color: '#ba82ff', fontWeight: 600 }}>Explore Scholar ↗</span>
+            </a>
+          </div>
+        </section>
+      )}
 
       {showAdd && (
         <div className="modal-backdrop" onMouseDown={() => setShowAdd(false)}>
