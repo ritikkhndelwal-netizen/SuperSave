@@ -101,3 +101,82 @@
 .markdown-view .md-code-lang{padding:4px 10px;background:#171022;border-bottom:1px solid #251a36;font-size:10px;font-family:monospace;text-transform:uppercase;color:#9d80c3}
 .markdown-view .md-code-block pre{margin:0;padding:12px;overflow-x:auto;font-family:Consolas,Monaco,monospace;font-size:11.5px;color:#eedeff}
 
+/* Favorite Button on Card */
+.favorite-btn{position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(12,9,18,.75);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);color:#d0c6dc;font-size:15px;cursor:pointer;transition:all .2s ease;z-index:5}
+.favorite-btn:hover{background:rgba(28,20,40,.9);transform:scale(1.1);border-color:#b585ff}
+.favorite-btn.favorited{color:#ff5a84;background:rgba(45,14,28,.88);border-color:#ff3366;box-shadow:0 0 12px rgba(255,51,102,.4)}
+
+/* Collections System Styles */
+.collections-header-bar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:26px}
+.collections-actions-group{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+/* Auto-Collection Toggle Switch Button */
+.auto-toggle-btn{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:12px;background:#130f1b;border:1px solid #2d243a;cursor:pointer;transition:all .25s ease;color:#aba1b5;font-size:12px;font-weight:600}
+.auto-toggle-btn:hover{border-color:#5a3f82;color:#f0eaf7}
+.auto-toggle-btn.active{background:linear-gradient(135deg,#231638,#161022);border-color:#7c48cf;color:#fff;box-shadow:0 4px 18px rgba(124,72,207,.25)}
+.toggle-switch-track{width:36px;height:20px;border-radius:999px;background:#241d30;border:1px solid #3c2f4e;position:relative;transition:all .25s ease}
+.auto-toggle-btn.active .toggle-switch-track{background:#7c3aed;border-color:#9f67ff}
+.toggle-switch-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:0 2px 4px rgba(0,0,0,.3)}
+.auto-toggle-btn.active .toggle-switch-thumb{transform:translateX(16px)}
+.toggle-status-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em}
+.toggle-status-badge.on{background:rgba(124,58,237,.25);color:#d3b0ff;border:1px solid #6333bb}
+.toggle-status-badge.off{background:rgba(60,52,72,.3);color:#8e8499;border:1px solid #43394f}
+
+/* Collection Cards Grid */
+.collections-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+.collection-card{border:1px solid var(--line);background:#110e18;border-radius:16px;overflow:hidden;transition:all .22s ease;display:flex;flex-direction:column;cursor:pointer;position:relative}
+.collection-card:hover{transform:translateY(-3px);border-color:#533d73;box-shadow:0 12px 35px rgba(0,0,0,.45)}
+.collection-card-banner{height:120px;position:relative;display:flex;align-items:flex-end;padding:16px;background-size:cover;background-position:center}
+.collection-banner-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,8,16,.2) 0%,rgba(11,8,16,.9) 100%)}
+.collection-thumb-collage{position:absolute;inset:0;display:flex;opacity:.35;overflow:hidden}
+.collage-img{flex:1;height:100%;object-fit:cover;border-right:1px solid rgba(0,0,0,.3)}
+.collection-badge-row{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;z-index:2}
+.collection-type-pill{padding:4px 9px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.collection-type-pill.ai{background:rgba(90,34,166,.85);border:1px solid #7e44d4;color:#f1e6ff;backdrop-filter:blur(8px)}
+.collection-type-pill.custom{background:rgba(30,24,40,.85);border:1px solid #4a3b5c;color:#d3c8e0;backdrop-filter:blur(8px)}
+.collection-count-pill{padding:4px 9px;border-radius:999px;background:rgba(10,8,14,.8);border:1px solid rgba(255,255,255,.1);color:#ded6e8;font-size:10px;font-weight:700}
+.collection-icon-badge{position:relative;z-index:2;width:44px;height:44px;border-radius:12px;background:#1b1525;border:1px solid #3c2c52;display:grid;place-items:center;font-size:22px;box-shadow:0 6px 20px rgba(0,0,0,.5);margin-bottom:-18px}
+.collection-card-content{padding:26px 18px 18px;display:flex;flex-direction:column;flex:1}
+.collection-card-content h3{margin:0 0 6px;font-size:17px;letter-spacing:-.02em;color:#f8f2fd}
+.collection-card-content p{margin:0 0 14px;font-size:12px;color:#9b92a4;line-height:1.55;flex:1}
+.collection-card-footer{display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid #1f192b;margin-top:auto}
+
+/* Collection Detail / Drilldown View */
+.collection-detail-header{margin-bottom:28px;padding:26px;border-radius:18px;background:linear-gradient(145deg,#161022,#0e0b14);border:1px solid #2d223f;position:relative;overflow:hidden}
+.breadcrumb-back-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:#1c1628;border:1px solid #322547;color:#c0aadc;font-size:11.5px;font-weight:600;cursor:pointer;margin-bottom:16px;transition:all .18s ease}
+.breadcrumb-back-btn:hover{background:#2a1f3c;color:#fff;border-color:#5e3d8f}
+.collection-detail-info{display:flex;gap:20px;align-items:flex-start}
+.collection-detail-avatar{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;font-size:28px;background:#241836;border:1px solid #4d3370;box-shadow:0 8px 24px rgba(100,55,160,.25);flex-shrink:0}
+.collection-detail-meta h1{margin:0 0 6px;font-size:28px;letter-spacing:-.04em;color:#fdfaff}
+.collection-detail-meta p{margin:0 0 12px;font-size:13px;color:#a89fb3;max-width:700px;line-height:1.6}
+
+/* Saved Tab Filters & View Toggle */
+.saved-filter-bar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin:22px 0 20px}
+.saved-filters-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.saved-view-toggle{display:flex;align-items:center;gap:4px;padding:3px;background:#120e1a;border:1px solid #261e31;border-radius:9px}
+.view-toggle-btn{padding:6px 10px;border-radius:7px;border:0;background:transparent;color:#8f8499;font-size:12px;cursor:pointer;transition:all .18s ease}
+.view-toggle-btn.active{background:#261b36;color:#eedeff}
+
+/* Compact List View */
+.content-list{display:grid;gap:10px}
+.content-list-item{display:flex;align-items:center;gap:16px;padding:12px 16px;border-radius:13px;background:#120e19;border:1px solid #231c2d;text-decoration:none;transition:all .18s ease;position:relative}
+.content-list-item:hover{background:#1b1525;border-color:#483561;transform:translateX(3px)}
+.list-thumb{width:80px;height:52px;border-radius:8px;background-size:cover;background-position:center;flex-shrink:0;position:relative;background:#1d1627}
+.list-info{flex:1;min-width:0}
+.list-info h4{margin:0 0 4px;font-size:14px;color:#f2ecf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-info p{margin:0;font-size:11.5px;color:#92879c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-meta{display:flex;align-items:center;gap:10px;flex-shrink:0}
+
+/* Empty State Card */
+.empty-state-card{text-align:center;padding:50px 24px;border-radius:18px;border:1px dashed #342845;background:#110d18;margin:24px 0}
+.empty-icon{font-size:42px;margin-bottom:14px;display:block}
+.empty-state-card h3{margin:0 0 8px;font-size:18px;color:#f3ecfa}
+.empty-state-card p{margin:0 auto 20px;max-width:440px;font-size:12.5px;color:#9b90a6;line-height:1.6}
+
+/* Featured Collections Row on Dashboard */
+.featured-collections-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:34px}
+.featured-collection-mini{padding:16px;border-radius:13px;background:#120e1a;border:1px solid #271f34;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .2s ease}
+.featured-collection-mini:hover{background:#1b1426;border-color:#533975;transform:translateY(-2px)}
+.mini-icon{width:42px;height:42px;border-radius:10px;background:#241838;border:1px solid #432b64;display:grid;place-items:center;font-size:20px;flex-shrink:0}
+.mini-details h4{margin:0 0 3px;font-size:13.5px;color:#f5effb}
+.mini-details span{font-size:11px;color:#988ea2}
