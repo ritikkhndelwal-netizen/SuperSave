@@ -50,10 +50,15 @@
 
 .resource-list{display:flex;flex-wrap:wrap;gap:8px}
 .resource-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:9px;background:#15101d;border:1px solid #2c223c;font-size:11px;color:#cbbbe0}
+.resource-chip.clickable-chip{text-decoration:none;cursor:pointer;transition:all .18s ease}
+.resource-chip.clickable-chip:hover{background:#231a33;border-color:#5a388e;color:#fff;transform:translateY(-1px);box-shadow:0 4px 14px rgba(118,65,198,.25)}
+.chip-external-icon{font-size:10px;color:#ba82ff;margin-left:3px}
 
 .claim-item{padding:12px 14px;border-radius:10px;background:#130f1b;border:1px solid #271f33;margin-bottom:10px}
 .claim-text{font-size:12px;color:#f3ecfa;font-weight:600;margin:0 0 5px}
 .claim-note{font-size:11px;color:#a096ab;margin:0;line-height:1.4}
+.claim-verify-link{font-size:10.5px;color:#ba82ff;text-decoration:none;padding:3px 7px;border-radius:6px;background:#1d1629;border:1px solid #3b2854;white-space:nowrap;transition:all .15s ease}
+.claim-verify-link:hover{background:#2e1f44;color:#fff;border-color:#654299}
 
 .translate-bar{display:flex;align-items:center;gap:9px;margin-bottom:18px;padding:8px 12px;border-radius:10px;background:#130e1a;border:1px solid #261e33}
 .translate-select{background:#1f172b;border:1px solid #3c2a55;color:#eee;padding:6px 10px;border-radius:8px;font-size:11px;outline:none}

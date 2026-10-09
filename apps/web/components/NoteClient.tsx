@@ -4,6 +4,29 @@ import { useState, useEffect, useRef } from 'react';
 import type { SavedContent } from '../lib/types';
 import { MarkdownView } from './MarkdownView';
 
+function resolveResourceUrl(reference?: string, name?: string): string {
+  const ref = (reference || '').trim();
+  const title = (name || '').trim();
+  if (ref.startsWith('http://') || ref.startsWith('https://')) {
+    return ref;
+  }
+  if (
+    ref.startsWith('www.') ||
+    ref.includes('.com') ||
+    ref.includes('.org') ||
+    ref.includes('.io') ||
+    ref.includes('.dev') ||
+    ref.includes('.net') ||
+    ref.includes('.co')
+  ) {
+    return `https://${ref.replace(/^\/\//, '')}`;
+  }
+  if (ref.startsWith('github.com') || ref.startsWith('gitlab.com')) {
+    return `https://${ref}`;
+  }
+  return `https://www.google.com/search?q=${encodeURIComponent(`${title} ${ref}`.trim())}`;
+}
+
 export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   const [item, setItem] = useState<SavedContent>(initialItem);
   const [personalNote, setPersonalNote] = useState(initialItem.personalNote);
@@ -510,13 +533,29 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
             <section className="note-section" style={{ marginTop: '0' }}>
               <div className="section-label">DETECTED RESOURCES & EXTERNAL TOOLS</div>
               <div className="resource-list" style={{ marginBottom: '20px' }}>
-                {(item.detected_resources || []).map((res, i) => (
-                  <span key={i} className="resource-chip">
-                    {res.type === 'github' ? '🐙' : res.type === 'book' ? '📖' : '🔗'}
-                    <strong>{res.name}</strong>
-                    <small style={{ color: '#9b8db2' }}>({res.reference})</small>
-                  </span>
-                ))}
+                {(item.detected_resources || []).length > 0 ? (
+                  item.detected_resources!.map((res, i) => {
+                    const url = resolveResourceUrl(res.reference, res.name);
+                    const isDirect = res.reference?.trim().startsWith('http') || res.reference?.includes('.');
+                    return (
+                      <a
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="resource-chip clickable-chip"
+                        title={isDirect ? `Open ${res.reference}` : `Search ${res.name} on Google`}
+                      >
+                        {res.type === 'github' ? '🐙' : res.type === 'book' ? '📖' : '🔗'}
+                        <strong>{res.name}</strong>
+                        {res.reference && <small style={{ color: '#baa8d6' }}>({res.reference})</small>}
+                        <span className="chip-external-icon">↗</span>
+                      </a>
+                    );
+                  })
+                ) : (
+                  <p style={{ color: '#888', fontSize: '12px' }}>No external resources detected in this content.</p>
+                )}
               </div>
 
               {(item.detected_products || []).length > 0 && (
@@ -524,10 +563,19 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
                   <div className="section-label">DETECTED PRODUCTS & BRANDS</div>
                   <div className="resource-list" style={{ marginBottom: '20px' }}>
                     {item.detected_products!.map((prod, i) => (
-                      <span key={i} className="resource-chip" style={{ background: '#181324' }}>
+                      <a
+                        key={i}
+                        href={`https://www.google.com/search?q=${encodeURIComponent(`${prod.brand} ${prod.name}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="resource-chip clickable-chip"
+                        style={{ background: '#181324' }}
+                        title={`Explore ${prod.brand} ${prod.name} on Google`}
+                      >
                         🏷️ <strong>{prod.brand}</strong> {prod.name}
-                        <small style={{ color: '#a295b9' }}>• {prod.category}</small>
-                      </span>
+                        {prod.category && <small style={{ color: '#a295b9' }}>• {prod.category}</small>}
+                        <span className="chip-external-icon">↗</span>
+                      </a>
                     ))}
                   </div>
                 </>
@@ -538,7 +586,18 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
                   <div className="section-label">FACTS & CLAIMS CONTEXT CHECK</div>
                   {item.facts_and_claims!.map((fc, i) => (
                     <div key={i} className="claim-item">
-                      <p className="claim-text">⚖️ Claim: "{fc.claim}"</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                        <p className="claim-text">⚖️ Claim: &ldquo;{fc.claim}&rdquo;</p>
+                        <a
+                          href={`https://www.google.com/search?q=${encodeURIComponent(`fact check ${fc.claim}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="claim-verify-link"
+                          title="Verify claim on Google"
+                        >
+                          Verify ↗
+                        </a>
+                      </div>
                       <p className="claim-note">💡 Reality Check: {fc.verification_note}</p>
                     </div>
                   ))}
