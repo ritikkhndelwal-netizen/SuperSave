@@ -41,20 +41,18 @@
                 pageEl.textContent = 'Non-web page (use input above to paste a URL)';
         }
     });
-    // Try auto-reading clipboard to pre-fill if it's a media URL
+    // Try auto-reading clipboard to pre-fill if it's a valid URL
     if (navigator.clipboard && navigator.clipboard.readText && urlInput) {
         navigator.clipboard.readText().then((text) => {
             const trimmed = (text || '').trim();
-            if (trimmed.startsWith('http') &&
-                (trimmed.includes('youtube.com') ||
-                    trimmed.includes('youtu.be') ||
-                    trimmed.includes('instagram.com') ||
-                    trimmed.includes('x.com') ||
-                    trimmed.includes('twitter.com') ||
-                    trimmed.includes('tiktok.com'))) {
-                urlInput.value = trimmed;
-                if (statusEl)
-                    statusEl.textContent = '📋 Detected media link from clipboard!';
+            const match = trimmed.match(/https?:\/\/[^\s<>"'\)]+/i);
+            if (match) {
+                const foundUrl = match[0];
+                if (!foundUrl.includes('localhost') && !foundUrl.includes('127.0.0.1')) {
+                    urlInput.value = foundUrl;
+                    if (statusEl)
+                        statusEl.textContent = '📋 Detected link from clipboard!';
+                }
             }
         }).catch(() => { });
     }

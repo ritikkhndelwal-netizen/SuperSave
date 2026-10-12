@@ -166,7 +166,108 @@ Ensure timestamps match actual points in the video. Only return raw JSON without
                 except Exception as e:
                     logger.warning(f"Could not delete Gemini file {uploaded_file.name}: {e}")
 
-    def extract_from_text(self, url: str, page_title: Optional[str] = None, page_desc: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def extract_from_image(
+        self,
+        image_path: str,
+        url: str,
+        page_title: Optional[str] = None,
+        page_desc: Optional[str] = None,
+        client_context: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Uploads an image (Pinterest Pin, Infographic, Design diagram, Fashion photo) to Gemini,
+        and uses multimodal computer vision to synthesize detailed knowledge.
+        """
+        if not self.is_available():
+            return None
+
+        uploaded_file = None
+        try:
+            logger.info(f"Uploading image to Gemini Vision API: {image_path}")
+            uploaded_file = self.client.files.upload(file=image_path)
+            logger.info(f"Image uploaded to Gemini with ID: {uploaded_file.name}")
+
+            prompt = f"""You are an elite AI Knowledge Synthesizer and Multimodal Visual Intelligence Engine for SuperSave.
+Analyze this image in depth. Carefully inspect all visual details, people, attire, interior design elements, objects, text, recipes, instructions, or style shown.
+Source URL: {url}
+Context Title: {page_title or 'Unknown'}
+Context Description: {page_desc or 'None'}
+Client / Page Notes: {client_context or 'None'}
+
+Extract a comprehensive, structured knowledge dossier.
+Return a STRICT JSON object with these EXACT keys:
+{{
+  "title": "Descriptive, accurate title representing what is depicted in the image",
+  "content_type": "One of: 'recipe' | 'fitness' | 'review' | 'fashion' | 'design_idea' | 'infographic' | 'general'",
+  "category": "Broad domain (e.g., Interior Design, Fashion & Style, Cooking & Recipes, Fitness, Architecture, Photography, Beauty & Makeup)",
+  "subcategory": "Specific sub-domain (e.g., Scandinavian Living Room, Streetwear, Low-Carb Dinner, Glam Makeup)",
+  "summary": "2-3 sentence executive summary explaining what is visually depicted or taught in the image",
+  "summary_detail": {{
+    "executive": "Detailed paragraph analyzing the visual style, composition, key subjects, and aesthetic choices",
+    "tldr": "A 30-second bullet point summary of key features"
+  }},
+  "notes": "Rich markdown notes with clear headers (##), bullet points, breakdown of components, recipes, or style elements visible in the image",
+  "key_takeaways": [
+    "Key visual insight, recipe ingredient, or style rule 1",
+    "Key visual insight, recipe ingredient, or style rule 2",
+    "Key visual insight, recipe ingredient, or style rule 3"
+  ],
+  "chapters": [
+    {{
+      "timestamp": "00:00",
+      "seconds": 0,
+      "title": "Visual Analysis & Composition",
+      "summary": "Core concept and visual subject"
+    }}
+  ],
+  "visual_insights": {{
+    "on_screen_text": ["Any text, titles, quotes, prices, or labels visible in the image"],
+    "diagrams_or_slides": ["Descriptions of charts, diagrams, floorplans, or infographics shown"],
+    "tools_or_ui_shown": ["Tools, camera equipment, apps, or UI shown"],
+    "objects_or_ingredients": ["Physical objects, furniture items, clothing pieces, ingredients, materials, or decor shown"]
+  }},
+  "code_snippets": [],
+  "detected_resources": [],
+  "detected_products": [
+    {{
+      "brand": "Identified brand, style, or aesthetic label",
+      "name": "Featured clothing piece, furniture item, decor, or product",
+      "category": "Product category"
+    }}
+  ],
+  "facts_and_claims": [],
+  "metadata": {{
+    "tags": ["relevant", "tags"],
+    "keywords": ["keywords"],
+    "technologies": [],
+    "people": ["Identified persons or creators"],
+    "brands": ["Identified brands or aesthetic labels"],
+    "locations": []
+  }},
+  "action_items": [
+    "Actionable step or styling/cooking recommendation based on this visual idea"
+  ]
+}}
+
+Only return raw JSON without markdown wrapping."""
+
+            raw_text = self._generate_with_fallback([uploaded_file, prompt])
+            if raw_text:
+                return self._parse_json_response(raw_text)
+            return None
+
+        except Exception as e:
+            logger.error(f"Error in Gemini image vision extraction: {e}")
+            return None
+        finally:
+            if uploaded_file:
+                try:
+                    self.client.files.delete(name=uploaded_file.name)
+                    logger.info(f"Deleted temporary Gemini image: {uploaded_file.name}")
+                except Exception as e:
+                    logger.warning(f"Could not delete Gemini image {uploaded_file.name}: {e}")
+
+    def extract_from_text(self, url: str, page_title: Optional[str] = None, page_desc: Optional[str] = None, extra_context: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Fallback extraction using web metadata when video download is unavailable."""
         if not self.is_available():
             return None
@@ -176,6 +277,7 @@ Analyze this webpage and metadata:
 URL: {url}
 Title: {page_title or 'Unknown'}
 Description: {page_desc or 'None'}
+Page / Client Details: {extra_context or 'None'}
 
 Generate a structured knowledge dossier in JSON format with:
 - "title": Clear title

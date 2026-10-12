@@ -60,6 +60,7 @@ class SummaryDetail(BaseModel):
 class ExtractRequest(BaseModel):
     source_url: str = Field(min_length=1)
     mode: str = "video_lowres"  # "video_lowres" | "audio_fast" | "auto"
+    client_meta: Optional[Dict[str, Any]] = None
 
 class ExtractResponse(BaseModel):
     title: str

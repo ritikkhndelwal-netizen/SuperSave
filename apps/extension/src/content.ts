@@ -200,28 +200,36 @@
   // -------------------------------------------------------------
   const COPY_PROMPT_ID = 'supersave-copy-prompt';
 
-  function isValidSaveUrl(url: string): boolean {
-    if (!url || typeof url !== 'string') return false;
-    const trimmed = url.trim();
-    if (!/^https?:\/\//i.test(trimmed)) return false;
-    if (/\s/.test(trimmed)) return false;
+  function extractSaveUrl(text: string): string | null {
+    if (!text || typeof text !== 'string') return null;
+    const match = text.trim().match(/https?:\/\/[^\s<>"'\)]+/i);
+    if (!match) return null;
+    const candidate = match[0];
     try {
-      const parsed = new URL(trimmed);
+      const parsed = new URL(candidate);
       if (
         parsed.hostname === 'localhost' ||
         parsed.hostname === '127.0.0.1' ||
         parsed.hostname === '0.0.0.0'
       ) {
-        return false;
+        return null;
       }
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return candidate;
+      }
     } catch {
-      return false;
+      return null;
     }
+    return null;
   }
 
-  function showCopyPrompt(url: string) {
-    if (!isValidSaveUrl(url)) return;
+  function isValidSaveUrl(url: string): boolean {
+    return Boolean(extractSaveUrl(url));
+  }
+
+  function showCopyPrompt(rawText: string) {
+    const url = extractSaveUrl(rawText);
+    if (!url) return;
 
     let prompt = document.getElementById(COPY_PROMPT_ID);
     if (prompt) {
@@ -307,44 +315,163 @@
   }
 
   // -------------------------------------------------------------
-  // 2. Core Save Dispatcher
+  // 1c. Client-side DOM Metadata Capture (Pinterest & Rich SPAs)
   // -------------------------------------------------------------
-  function saveTargetUrl(url: string, buttonElement?: HTMLElement) {
+  function extractCurrentPageMeta(targetUrl?: string) {
+    try {
+      const isPinterest =
+        window.location.hostname.includes('pinterest.') || (targetUrl && targetUrl.includes('pinterest.'));
+
+      let title = document.title || '';
+      let description = '';
+      let thumbnail = '';
+      let author = '';
+
+      const ogTitle = document.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.content;
+      const ogDesc = document.querySelector<HTMLMetaElement>(
+        'meta[property="og:description"], meta[name="description"]'
+      )?.content;
+      const ogImage = document.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content;
+
+      if (ogTitle) title = ogTitle;
+      if (ogDesc) description = ogDesc;
+      if (ogImage) thumbnail = ogImage;
+
+      // Deep Pinterest extraction if on Pinterest
+      if (isPinterest) {
+        // A. Title
+        const pinTitleEl = document.querySelector(
+          '[data-test-id="pin-title"] h1, [data-test-id="pin-title"], h1[data-test-id*="title"], h1'
+        );
+        if (pinTitleEl && pinTitleEl.textContent?.trim()) {
+          title = pinTitleEl.textContent.trim();
+        }
+
+        // B. Description
+        const descEl = document.querySelector(
+          '[data-test-id="pin-description"], [data-test-id="closeup-description"], [data-test-id="truncated-description"]'
+        );
+        if (descEl && descEl.textContent?.trim()) {
+          description = descEl.textContent.trim();
+        }
+
+        // C. Creator
+        const authorEl = document.querySelector(
+          '[data-test-id="creator-profile-name"], [data-test-id="user-profile-name"], [data-test-id="pin-creator-profile"]'
+        );
+        if (authorEl && authorEl.textContent?.trim()) {
+          author = authorEl.textContent.trim();
+        }
+
+        // D. High-Res Image
+        const pinImg = document.querySelector<HTMLImageElement>(
+          '[data-test-id="pin-closeup-image"] img, div[data-test-id="visual-search-container"] img, img[src*="pinimg.com/originals/"], img[src*="pinimg.com/736x/"], img[srcset*="pinimg.com"]'
+        );
+        if (pinImg?.src) {
+          thumbnail = pinImg.src;
+        }
+      }
+
+      return {
+        title: title.trim(),
+        description: description.trim(),
+        thumbnail: thumbnail.trim(),
+        author: author.trim(),
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  // -------------------------------------------------------------
+  // 2. Core Save Dispatcher (Resilient with Direct API Fallback)
+  // -------------------------------------------------------------
+  function saveTargetUrl(url: string, buttonElement?: HTMLElement, clientMeta?: any) {
     if (!url || !url.startsWith('http')) {
       url = window.location.href;
     }
 
-    const originalContent = buttonElement ? buttonElement.innerHTML : '';
+    if (!clientMeta) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname === window.location.hostname || url === window.location.href) {
+          clientMeta = extractCurrentPageMeta(url);
+        }
+      } catch (_) {}
+    }
+
+    const defaultBtnText = buttonElement ? buttonElement.innerHTML : '';
     if (buttonElement) {
       buttonElement.innerHTML = `<span>✦ Saving…</span>`;
       buttonElement.style.pointerEvents = 'none';
       buttonElement.style.opacity = '0.75';
     }
 
-    chrome.runtime.sendMessage({ type: 'SAVE_CURRENT_PAGE', url }, (response) => {
+    const restoreButton = () => {
       if (buttonElement) {
         buttonElement.style.pointerEvents = 'auto';
         buttonElement.style.opacity = '1';
       }
+    };
 
-      if (response?.ok) {
-        if (buttonElement) {
-          buttonElement.innerHTML = `<span>✓ Saved!</span>`;
-          window.setTimeout(() => {
-            buttonElement.innerHTML = originalContent;
-          }, 2400);
-        }
-        showToast('Saved to SuperSave!', 'Gemini is analyzing video and generating notes.');
-      } else {
-        if (buttonElement) {
-          buttonElement.innerHTML = `<span>✕ Error</span>`;
-          window.setTimeout(() => {
-            buttonElement.innerHTML = originalContent;
-          }, 2400);
-        }
-        showToast('Save failed', response?.error || 'Could not connect to SuperSave API server.');
+    const handleSuccess = () => {
+      restoreButton();
+      if (buttonElement) {
+        buttonElement.innerHTML = `<span>✓ Saved!</span>`;
+        window.setTimeout(() => {
+          buttonElement.innerHTML = defaultBtnText || `<span>🔖 Save</span>`;
+        }, 2200);
       }
-    });
+      showToast('Saved to SuperSave!', 'Gemini is extracting intelligence and generating notes.');
+    };
+
+    const handleFailure = (errMsg?: string) => {
+      restoreButton();
+      if (buttonElement) {
+        buttonElement.innerHTML = `<span>✕ Error</span>`;
+        window.setTimeout(() => {
+          buttonElement.innerHTML = defaultBtnText || `<span>🔖 Save</span>`;
+        }, 2200);
+      }
+      showToast('Save failed', errMsg || 'Could not connect to SuperSave API server at http://localhost:4000.');
+    };
+
+    const directApiSave = async () => {
+      try {
+        const resp = await fetch('http://localhost:4000/api/content', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url, client_meta: clientMeta }),
+        });
+        if (resp.ok) {
+          handleSuccess();
+        } else {
+          const errData = await resp.json().catch(() => null);
+          handleFailure(errData?.error || `API error (${resp.status})`);
+        }
+      } catch (err: any) {
+        handleFailure(err?.message || 'Cannot connect to SuperSave API on port 4000.');
+      }
+    };
+
+    try {
+      if (chrome?.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'SAVE_CURRENT_PAGE', url, client_meta: clientMeta }, (response) => {
+          if (chrome.runtime.lastError || !response) {
+            // Background worker may be asleep or context invalidated, fallback to direct fetch
+            directApiSave();
+          } else if (response.ok) {
+            handleSuccess();
+          } else {
+            handleFailure(response.error);
+          }
+        });
+      } else {
+        directApiSave();
+      }
+    } catch {
+      directApiSave();
+    }
   }
 
   // -------------------------------------------------------------
@@ -605,56 +732,15 @@
   }
 
   // -------------------------------------------------------------
-  // 6. Generic Floating Fallback Action Button
-  // -------------------------------------------------------------
-  function makeFloatingButton() {
-    if (document.getElementById(FLOATING_BTN_ID)) return;
-
-    const button = document.createElement('button');
-    button.id = FLOATING_BTN_ID;
-    button.type = 'button';
-    button.innerHTML = `<span>🔖 Save to SuperSave</span>`;
-    button.style.cssText = `
-      all: initial;
-      box-sizing: border-box;
-      position: fixed;
-      right: 20px;
-      bottom: 24px;
-      z-index: 2147483646;
-      padding: 10px 15px;
-      border-radius: 999px;
-      background: linear-gradient(135deg, #ba82ff, #7444d7);
-      color: #ffffff;
-      font: 700 12px Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-      box-shadow: 0 10px 28px rgba(116, 68, 215, 0.38);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      transition: transform 0.18s ease, box-shadow 0.18s ease;
-      opacity: 0.9;
-    `;
-    button.onmouseenter = () => {
-      button.style.transform = 'translateY(-2px)';
-      button.style.opacity = '1';
-    };
-    button.onmouseleave = () => {
-      button.style.transform = 'translateY(0)';
-      button.style.opacity = '0.9';
-    };
-
-    button.addEventListener('click', () => {
-      saveTargetUrl(window.location.href, button);
-    });
-
-    document.documentElement.appendChild(button);
-  }
-
-  // -------------------------------------------------------------
-  // 7. Orchestrator with Debounced MutationObserver & Click Captures
+  // 6. Clean UI Orchestrator
   // -------------------------------------------------------------
   console.log('[SuperSave] Active on ' + window.location.hostname);
+
+  // Clean up any previously injected in-page buttons
+  function cleanupInjectedElements() {
+    document.querySelectorAll('.supersave-pin-btn, #' + FLOATING_BTN_ID).forEach((el) => el.remove());
+  }
+  cleanupInjectedElements();
 
   let debounceTimer: number | null = null;
   function runAdapters() {
@@ -667,8 +753,6 @@
     } else if (host.includes('twitter.com') || host.includes('x.com')) {
       enhanceTwitter();
     }
-
-    makeFloatingButton();
   }
 
   function scheduleRun() {
@@ -708,7 +792,6 @@
   // -------------------------------------------------------------
   // 8. Smart Copy-to-Save Triggers (Clipboard & Native Copy Buttons)
   // -------------------------------------------------------------
-  // Fallback inline main-world script injection (in addition to manifest content_scripts)
   function injectMainWorldBridge() {
     try {
       const script = document.createElement('script');
@@ -716,26 +799,59 @@
         (() => {
           if (window.__supersave_interceptor_loaded) return;
           window.__supersave_interceptor_loaded = true;
+
+          function broadcast(text) {
+            if (!text || typeof text !== 'string') return;
+            const trimmed = text.trim();
+            if (trimmed.length > 5 && (trimmed.includes('http://') || trimmed.includes('https://') || trimmed.includes('pin.it'))) {
+              window.postMessage({ type: 'SUPERSAVE_CLIPBOARD_WRITE', text: trimmed }, '*');
+            }
+          }
+
           if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
             const orig = navigator.clipboard.writeText.bind(navigator.clipboard);
             navigator.clipboard.writeText = function(text) {
-              try {
-                if (text && typeof text === 'string') {
-                  window.postMessage({ type: 'SUPERSAVE_CLIPBOARD_WRITE', text }, '*');
-                }
-              } catch (_) {}
+              try { broadcast(String(text || '')); } catch (_) {}
               return orig(text);
             };
           }
+
+          if (navigator.clipboard && typeof navigator.clipboard.write === 'function') {
+            const origW = navigator.clipboard.write.bind(navigator.clipboard);
+            navigator.clipboard.write = function(data) {
+              try {
+                if (Array.isArray(data)) {
+                  for (const item of data) {
+                    if (item && item.types) {
+                      for (const t of item.types) {
+                        if (typeof t === 'string' && t.includes('text')) {
+                          item.getType(t).then(b => b.text()).then(txt => broadcast(txt)).catch(() => {});
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+              return origW(data);
+            };
+          }
+
           if (typeof document.execCommand === 'function') {
             const origExec = document.execCommand.bind(document);
             document.execCommand = function(cmd, showUI, val) {
               if (typeof cmd === 'string' && cmd.toLowerCase() === 'copy') {
                 try {
-                  const sel = window.getSelection ? window.getSelection().toString() : '';
-                  if (sel) {
-                    window.postMessage({ type: 'SUPERSAVE_CLIPBOARD_WRITE', text: sel }, '*');
+                  let text = '';
+                  const active = document.activeElement;
+                  if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+                    const start = active.selectionStart ?? 0;
+                    const end = active.selectionEnd ?? 0;
+                    text = end > start ? active.value.substring(start, end) : active.value;
                   }
+                  if (!text && window.getSelection) {
+                    text = window.getSelection().toString() || '';
+                  }
+                  broadcast(text);
                 } catch (_) {}
               }
               return origExec(cmd, showUI, val);
@@ -749,18 +865,19 @@
   }
   injectMainWorldBridge();
 
-  // A. Listen for postMessages from MAIN-world interceptor (Instagram, Twitter, Reddit, Amazon, etc.)
+  // A. Listen for postMessages from MAIN-world interceptor
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     if (event.data?.type === 'SUPERSAVE_CLIPBOARD_WRITE') {
       const text = String(event.data.text || '').trim();
-      if (isValidSaveUrl(text)) {
-        showCopyPrompt(text);
+      const extracted = extractSaveUrl(text);
+      if (extracted) {
+        showCopyPrompt(extracted);
       }
     }
   });
 
-  // B. Native DOM 'copy' event (user highlighted URL & pressed Ctrl+C or Right-click -> Copy)
+  // B. Native DOM 'copy' event
   document.addEventListener('copy', () => {
     let copiedText = '';
     const active = document.activeElement;
@@ -769,20 +886,20 @@
       const end = active.selectionEnd ?? 0;
       if (end > start) {
         copiedText = active.value.substring(start, end);
-      } else if (isValidSaveUrl(active.value)) {
+      } else {
         copiedText = active.value;
       }
     }
     if (!copiedText) {
       copiedText = window.getSelection()?.toString() || '';
     }
-    copiedText = copiedText.trim();
-    if (isValidSaveUrl(copiedText)) {
-      showCopyPrompt(copiedText);
+    const extracted = extractSaveUrl(copiedText);
+    if (extracted) {
+      showCopyPrompt(extracted);
     }
   });
 
-  // C. Click listener for any "Copy Link" / "Copy URL" buttons or share menus
+  // C. Click listener for any "Copy Link" buttons or share menus
   document.addEventListener(
     'click',
     (e) => {
@@ -790,14 +907,15 @@
       if (!target) return;
 
       const clickable = target.closest<HTMLElement>(
-        'button, [role="button"], [role="menuitem"], a, #copy-button, ytd-button-renderer#copy-button'
+        'button, [role="button"], [role="menuitem"], a, #copy-button, ytd-button-renderer#copy-button, [data-test-id*="copy" i]'
       );
       if (!clickable) return;
 
       const text = (clickable.textContent || '').trim().toLowerCase();
       const aria = (clickable.getAttribute('aria-label') || '').toLowerCase();
       const title = (clickable.getAttribute('title') || '').toLowerCase();
-      const combined = `${text} ${aria} ${title}`;
+      const dataTestId = (clickable.getAttribute('data-test-id') || '').toLowerCase();
+      const combined = `${text} ${aria} ${title} ${dataTestId}`;
 
       const isCopyTrigger =
         combined.includes('copy link') ||
@@ -808,29 +926,47 @@
 
       if (isCopyTrigger) {
         window.setTimeout(() => {
-          // Check for nearby or modal URL input
+          // 1. Check clipboard directly if permitted
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then((clipText) => {
+              const extracted = extractSaveUrl(clipText);
+              if (extracted) {
+                showCopyPrompt(extracted);
+              }
+            }).catch(() => {});
+          }
+
+          // 2. Check for nearby or modal URL input
           const shareInput = document.querySelector<HTMLInputElement>(
             '#share-url, input[id*="share" i], input[value^="http"], input[readonly][value*="http"]'
           );
-          if (shareInput && isValidSaveUrl(shareInput.value)) {
-            showCopyPrompt(shareInput.value.trim());
-            return;
-          }
-
-          // Check if inside a post card / dialog with a permalink
-          const container = clickable.closest('article, [data-testid="tweet"], div[role="dialog"]');
-          if (container) {
-            const anchor = container.querySelector<HTMLAnchorElement>(
-              'a[href*="/p/"], a[href*="/reel/"], a[href*="/status/"], a[href*="/comments/"], a[href*="/dp/"]'
-            );
-            if (anchor?.href && isValidSaveUrl(anchor.href)) {
-              showCopyPrompt(anchor.href);
+          if (shareInput) {
+            const extracted = extractSaveUrl(shareInput.value);
+            if (extracted) {
+              showCopyPrompt(extracted);
               return;
             }
           }
-        }, 100);
+
+          // 3. Check if inside a post card / dialog with a permalink
+          const container = clickable.closest('article, [data-testid="tweet"], div[role="dialog"], [data-test-id="pin"]');
+          if (container) {
+            const anchor = container.querySelector<HTMLAnchorElement>(
+              'a[href*="/p/"], a[href*="/reel/"], a[href*="/status/"], a[href*="/comments/"], a[href*="/dp/"], a[href*="/pin/"]'
+            );
+            if (anchor?.href) {
+              const extracted = extractSaveUrl(anchor.href);
+              if (extracted) {
+                showCopyPrompt(extracted);
+                return;
+              }
+            }
+          }
+        }, 120);
       }
     },
     true
   );
+
+  // End of content script
 })();

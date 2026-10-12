@@ -3,6 +3,7 @@ import json
 import re
 import urllib.parse
 import urllib.request
+import httpx
 from typing import Tuple, Optional
 from .schemas import FastMetadataResponse
 
@@ -12,10 +13,12 @@ def detect_source(url: str) -> str:
         return "Instagram"
     if "youtube.com" in lower or "youtu.be" in lower:
         return "YouTube"
+    if "pinterest.com" in lower or "pin.it" in lower:
+        return "Pinterest"
     return "Web"
 
 def get_embed_url(url: str) -> Optional[str]:
-    """Generates a clean embeddable player URL for YouTube or Instagram."""
+    """Generates a clean embeddable player URL for YouTube, Instagram, or Pinterest."""
     # YouTube (regular, shorts, youtu.be)
     yt_match = re.search(r'(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})', url)
     if yt_match:
@@ -28,7 +31,55 @@ def get_embed_url(url: str) -> Optional[str]:
         code = ig_match.group(1)
         return f"https://www.instagram.com/reel/{code}/embed"
 
+    # Pinterest Pin
+    pin_match = re.search(r'pin\/([0-9]+)', url)
+    if pin_match:
+        pin_id = pin_match.group(1)
+        return f"https://assets.pinterest.com/ext/embed.html?id={pin_id}"
+
     return None
+
+def fetch_pinterest_oembed(url: str) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    """
+    Fetch pin title, author, high-res thumbnail, and embed iframe from Pinterest's official oEmbed endpoint.
+    Handles pin.it shortened URLs by following HTTP 301/308 redirects via httpx.
+    """
+    canonical_url = url
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        # Resolve pin.it or shortened redirect with HTTP 308 support
+        if "pin.it" in url.lower():
+            with httpx.Client(follow_redirects=True, timeout=8.0, headers=headers) as client:
+                resp = client.get(url)
+                canonical_url = str(resp.url)
+
+        # Clean canonical URL to extract clean pin ID and clean pin URL
+        pin_match = re.search(r'pin\/([0-9]+)', canonical_url)
+        pin_id = pin_match.group(1) if pin_match else None
+        if pin_id:
+            canonical_url = f"https://www.pinterest.com/pin/{pin_id}/"
+
+        # Call official Pinterest oEmbed
+        oembed_url = f"https://www.pinterest.com/oembed.json?url={urllib.parse.quote(canonical_url)}"
+        with httpx.Client(timeout=8.0, headers=headers) as client:
+            resp = client.get(oembed_url)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_title = (data.get("title") or "").strip()
+                author = data.get("author_name")
+                thumb = data.get("thumbnail_url")
+                # Upgrade thumbnail to high resolution (736x) if possible
+                if thumb and "/236x/" in thumb:
+                    thumb = thumb.replace("/236x/", "/736x/")
+
+                embed_url = f"https://assets.pinterest.com/ext/embed.html?id={pin_id}" if pin_id else None
+                title = raw_title if raw_title else None
+                return title, author, thumb, embed_url
+    except Exception:
+        return None, None, None, None
+    return None, None, None, None
 
 def fetch_youtube_oembed(url: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Fetch video title, author, and thumbnail via YouTube's official oEmbed endpoint."""
@@ -99,6 +150,18 @@ def get_fast_metadata(url: str) -> FastMetadataResponse:
                 source=source,
                 embed_url=embed_url
             )
+
+    if source == "Pinterest":
+        p_title, p_author, p_thumb, p_embed = fetch_pinterest_oembed(url)
+        clean_title = p_title or (f"Pinterest Idea by {p_author}" if p_author else "Pinterest Pin")
+        return FastMetadataResponse(
+            title=clean_title,
+            author=p_author or "Pinterest",
+            thumbnail=p_thumb,
+            category="Design & Creative",
+            source=source,
+            embed_url=p_embed or embed_url
+        )
 
     # General / Instagram fallback
     title, _desc, thumbnail = fetch_page_metadata(url)

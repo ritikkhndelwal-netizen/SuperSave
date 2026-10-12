@@ -1,6 +1,10 @@
 import os
 import re
+import shutil
+import tempfile
+import urllib.request
 import logging
+from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,6 +67,21 @@ def get_metadata(request: FastMetadataRequest):
     url = request.source_url.strip()
     return get_fast_metadata(url)
 
+def is_valid_media_image(img_url: Optional[str]) -> bool:
+    """Verifies that the image URL is an actual content photo, and NOT a favicon or website logo."""
+    if not img_url or not isinstance(img_url, str):
+        return False
+    lower = img_url.lower()
+    # Reject generic favicons, logos, or icon fallback services
+    if any(bad in lower for bad in ["favicon", "favicons", "avatar", "default_", "icon", "logo"]):
+        return False
+    # Accept real CDN media images (Pinterest i.pinimg.com, Instagram cdn, etc.)
+    if "pinimg.com" in lower:
+        return True
+    if any(ext in lower for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+        return True
+    return False
+
 @app.post("/extract", response_model=ExtractResponse)
 def extract_content(request: ExtractRequest):
     """
@@ -70,10 +89,17 @@ def extract_content(request: ExtractRequest):
     """
     url = request.source_url.strip()
     mode = request.mode or "video_lowres"
-    logger.info(f"Extract requested for: {url} (mode: {mode})")
+    client_meta = request.client_meta or {}
+    logger.info(f"Extract requested for: {url} (mode: {mode}, has_client_meta: {bool(client_meta)})")
 
     # Step A: Get fast metadata first so we always have title, thumbnail, and embed player
     fast_meta = get_fast_metadata(url)
+    if client_meta.get("title"):
+        fast_meta.title = str(client_meta["title"]).strip()
+    if client_meta.get("thumbnail") and is_valid_media_image(client_meta["thumbnail"]):
+        fast_meta.thumbnail = str(client_meta["thumbnail"]).strip()
+    if client_meta.get("author"):
+        fast_meta.author = str(client_meta["author"]).strip()
 
     # Step B: Attempt media download and multimodal Gemini synthesis
     media_path = None
@@ -81,22 +107,67 @@ def extract_content(request: ExtractRequest):
     ai_data = None
 
     if gemini.is_available():
-        try:
-            logger.info(f"Attempting media download for {url} in {mode} mode...")
-            media_path, temp_dir = MediaDownloader.download(url, mode=mode)
-            if media_path:
-                logger.info(f"Media downloaded to {media_path}. Sending to Gemini multimodal...")
-                ai_data = gemini.extract_from_media(media_path, url)
-        except Exception as e:
-            logger.warning(f"Media download/multimodal step failed: {e}")
-        finally:
-            MediaDownloader.cleanup(temp_dir)
+        # Only attempt video download if not a known image/idea platform like Pinterest
+        if fast_meta.source != "Pinterest":
+            try:
+                logger.info(f"Attempting media download for {url} in {mode} mode...")
+                media_path, temp_dir = MediaDownloader.download(url, mode=mode)
+                if media_path:
+                    logger.info(f"Media downloaded to {media_path}. Sending to Gemini multimodal...")
+                    ai_data = gemini.extract_from_media(media_path, url)
+            except Exception as e:
+                logger.warning(f"Media download/multimodal step failed: {e}")
+            finally:
+                MediaDownloader.cleanup(temp_dir)
 
-        # Fallback to text extraction if media download didn't work (e.g. blog post or web page)
+        # Step B1: If we have an actual content image (e.g. Pinterest Pin image on pinimg.com, NOT a favicon!), use Gemini Vision!
+        if not ai_data and is_valid_media_image(fast_meta.thumbnail):
+            img_path = None
+            img_temp_dir = None
+            try:
+                logger.info(f"Downloading Pin/Visual image for Gemini Vision: {fast_meta.thumbnail}")
+                img_temp_dir = tempfile.mkdtemp(prefix="supersave_pin_img_")
+                ext = "jpg"
+                if ".png" in fast_meta.thumbnail.lower():
+                    ext = "png"
+                elif ".webp" in fast_meta.thumbnail.lower():
+                    ext = "webp"
+                img_path = os.path.join(img_temp_dir, f"pin.{ext}")
+                req = urllib.request.Request(fast_meta.thumbnail, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    with open(img_path, "wb") as f:
+                        f.write(resp.read())
+
+                client_extra = None
+                if client_meta.get("description") or client_meta.get("notes") or client_meta.get("author"):
+                    client_extra = f"Description: {client_meta.get('description', '')} | Author: {client_meta.get('author', '')} | Notes: {client_meta.get('notes', '')}"
+                
+                ai_data = gemini.extract_from_image(
+                    img_path,
+                    url,
+                    page_title=fast_meta.title,
+                    page_desc=client_meta.get("description"),
+                    client_context=client_extra
+                )
+            except Exception as e:
+                logger.warning(f"Gemini image vision extraction failed: {e}")
+            finally:
+                if img_temp_dir and os.path.exists(img_temp_dir):
+                    shutil.rmtree(img_temp_dir, ignore_errors=True)
+
+        # Fallback to text extraction if media/image download didn't work (e.g. blog post or web page)
         if not ai_data:
             logger.info("Falling back to Gemini text/metadata extraction...")
             _, page_desc, _ = fetch_page_metadata(url)
-            ai_data = gemini.extract_from_text(url, page_title=fast_meta.title, page_desc=page_desc)
+            client_extra = None
+            if client_meta.get("description") or client_meta.get("notes") or client_meta.get("author"):
+                client_extra = f"Description: {client_meta.get('description', '')} | Author: {client_meta.get('author', '')} | Notes: {client_meta.get('notes', '')}"
+            ai_data = gemini.extract_from_text(
+                url,
+                page_title=fast_meta.title,
+                page_desc=client_meta.get("description") or page_desc,
+                extra_context=client_extra
+            )
 
     # If Gemini returned valid structured data
     if ai_data:

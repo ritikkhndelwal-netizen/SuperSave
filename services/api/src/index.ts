@@ -86,7 +86,7 @@ export type Item = {
   metadata?: DeepMetadata;
   action_items?: string[];
   personalNote: string;
-  source: 'Instagram' | 'YouTube' | 'Upload' | 'Web';
+  source: 'Instagram' | 'YouTube' | 'Upload' | 'Web' | 'Pinterest';
   duration?: string;
   thumbnail?: string;
   embed_url?: string;
@@ -99,6 +99,7 @@ function sourceFor(url: string): Item['source'] {
   const value = url.toLowerCase();
   if (value.includes('instagram.com')) return 'Instagram';
   if (value.includes('youtube.com') || value.includes('youtu.be')) return 'YouTube';
+  if (value.includes('pinterest.com') || value.includes('pin.it')) return 'Pinterest';
   return 'Web';
 }
 
@@ -275,9 +276,11 @@ app.post('/api/content', async (req: Request, res: Response) => {
   const id = randomUUID();
   const initialSource = sourceFor(url);
 
+  const clientMeta = req.body?.client_meta;
+
   // Fast Metadata Fetch (< 500ms)
-  let initialTitle = 'Analyzing your content…';
-  let initialThumbnail: string | undefined = undefined;
+  let initialTitle = clientMeta?.title ? String(clientMeta.title).trim() : 'Analyzing your content…';
+  let initialThumbnail: string | undefined = clientMeta?.thumbnail ? String(clientMeta.thumbnail).trim() : undefined;
   let initialCategory = 'Processing';
   let initialEmbed: string | undefined = undefined;
 
@@ -296,8 +299,8 @@ app.post('/api/content', async (req: Request, res: Response) => {
         category?: string;
         embed_url?: string;
       };
-      if (meta.title) initialTitle = meta.title;
-      if (meta.thumbnail) initialThumbnail = meta.thumbnail;
+      if (meta.title && (!clientMeta?.title || initialTitle === 'Analyzing your content…')) initialTitle = meta.title;
+      if (meta.thumbnail && !initialThumbnail) initialThumbnail = meta.thumbnail;
       if (meta.category) initialCategory = meta.category;
       if (meta.embed_url) initialEmbed = meta.embed_url;
     }
@@ -329,7 +332,7 @@ app.post('/api/content', async (req: Request, res: Response) => {
   fetch(`${AI_SERVICE_URL}/extract`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ source_url: url, mode }),
+    body: JSON.stringify({ source_url: url, mode, client_meta: clientMeta }),
   })
     .then(async (r) => {
       if (!r.ok) throw new Error(`AI service responded ${r.status}`);
