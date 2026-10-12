@@ -392,6 +392,42 @@ app.post('/api/content', async (req: Request, res: Response) => {
   return res.status(202).json({ item });
 });
 
+app.patch('/api/content/:id', (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const item = store.get(id);
+  if (!item) return res.status(404).json({ error: 'Content not found' });
+
+  if (typeof req.body?.title === 'string' && req.body.title.trim()) {
+    item.title = req.body.title.trim();
+  }
+  if (Array.isArray(req.body?.tags)) {
+    const sanitized = req.body.tags
+      .map((t: unknown) => String(t).trim().replace(/^#+/, '').trim())
+      .filter(Boolean);
+    item.tags = Array.from(new Set(sanitized));
+    if (item.metadata) {
+      item.metadata.tags = item.tags;
+      item.metadata.keywords = item.tags.map((t) => t.toLowerCase());
+    }
+  }
+  if (typeof req.body?.category === 'string' && req.body.category.trim()) {
+    item.category = req.body.category.trim();
+  }
+  if (typeof req.body?.subcategory === 'string') {
+    item.subcategory = req.body.subcategory.trim();
+  }
+  return res.json({ ok: true, item });
+});
+
+app.delete('/api/content/:id', (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  if (!store.has(id)) {
+    return res.status(404).json({ error: 'Content not found' });
+  }
+  store.delete(id);
+  return res.json({ ok: true, deletedId: id });
+});
+
 app.patch('/api/content/:id/notes', (req, res) => {
   const item = store.get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });

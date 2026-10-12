@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import type { SavedContent } from '../lib/types';
 import { MarkdownView } from './MarkdownView';
+import { EditContentModal } from './EditContentModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 function resolveResourceUrl(reference?: string, name?: string): string {
   const ref = (reference || '').trim();
@@ -34,6 +37,73 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [saveState, setSaveState] = useState('');
+
+  const router = useRouter();
+
+  // Favorite state synced with localStorage
+  const [isFav, setIsFav] = useState(false);
+  useEffect(() => {
+    try {
+      const savedFavs = localStorage.getItem('supersave_favorites');
+      if (savedFavs) {
+        const favSet = new Set(JSON.parse(savedFavs));
+        setIsFav(favSet.has(item.id));
+      }
+    } catch {}
+  }, [item.id]);
+
+  const handleToggleFavorite = () => {
+    setIsFav((prev) => {
+      const next = !prev;
+      try {
+        const savedFavs = localStorage.getItem('supersave_favorites');
+        const set = new Set<string>(savedFavs ? JSON.parse(savedFavs) : []);
+        if (next) set.add(item.id);
+        else set.delete(item.id);
+        localStorage.setItem('supersave_favorites', JSON.stringify(Array.from(set)));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Modals State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    try {
+      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${api}/api/content/${item.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete card');
+
+      // Prune from localStorage
+      try {
+        const savedFavs = localStorage.getItem('supersave_favorites');
+        if (savedFavs) {
+          const set = new Set<string>(JSON.parse(savedFavs));
+          set.delete(item.id);
+          localStorage.setItem('supersave_favorites', JSON.stringify(Array.from(set)));
+        }
+        const savedColls = localStorage.getItem('supersave_user_collections');
+        if (savedColls) {
+          const colls = JSON.parse(savedColls);
+          const updated = colls.map((c: any) => ({
+            ...c,
+            itemIds: (c.itemIds || []).filter((id: string) => id !== item.id),
+          }));
+          localStorage.setItem('supersave_user_collections', JSON.stringify(updated));
+        }
+      } catch {}
+
+      setShowDeleteModal(false);
+      router.push('/dashboard');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete card.');
+    }
+  };
 
   // Q&A Search Mode: 'note_only' | 'note_and_web'
   const [qaSearchMode, setQaSearchMode] = useState<'note_only' | 'note_and_web'>('note_only');
@@ -202,7 +272,29 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
             ))}
           </div>
         </div>
-        <button className="secondary-button">☆ Favorite</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            type="button"
+            className={`secondary-button ${isFav ? 'favorited' : ''}`}
+            onClick={handleToggleFavorite}
+          >
+            {isFav ? '♥ Favorited' : '☆ Favorite'}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setShowEditModal(true)}
+          >
+            ✏️ Edit
+          </button>
+          <button
+            type="button"
+            className="danger-button"
+            onClick={() => setShowDeleteModal(true)}
+          >
+            🗑️ Delete
+          </button>
+        </div>
       </header>
 
       {isProcessing && (
@@ -712,6 +804,24 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
           </div>
         </aside>
       </div>
+
+      {showEditModal && (
+        <EditContentModal
+          item={item}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={(updated) => setItem((prev) => ({ ...prev, ...updated }))}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          item={item}
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </>
   );
 }

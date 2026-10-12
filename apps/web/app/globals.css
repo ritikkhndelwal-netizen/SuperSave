@@ -106,6 +106,32 @@
 .favorite-btn:hover{background:rgba(28,20,40,.9);transform:scale(1.1);border-color:#b585ff}
 .favorite-btn.favorited{color:#ff5a84;background:rgba(45,14,28,.88);border-color:#ff3366;box-shadow:0 0 12px rgba(255,51,102,.4)}
 
+/* Card Actions Menu */
+.card-menu-btn{position:absolute;top:12px;right:48px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(12,9,18,.75);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);color:#d0c6dc;font-size:13px;letter-spacing:-1px;cursor:pointer;transition:all .2s ease;z-index:5;user-select:none}
+.card-menu-btn:hover{background:rgba(28,20,40,.95);transform:scale(1.1);border-color:#b585ff;color:#fff}
+.card-dropdown-menu{position:absolute;top:48px;right:12px;width:175px;background:#140e20;border:1px solid #48336a;border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.7),0 0 18px rgba(186,130,255,.2);padding:6px;z-index:50;display:flex;flex-direction:column;gap:3px;animation:fadeInDown .15s ease-out}
+.card-dropdown-menu button{width:100%;text-align:left;background:transparent;border:0;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;color:#e5daf3;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s ease}
+.card-dropdown-menu button:hover{background:rgba(186,130,255,.15);color:#fff}
+.card-dropdown-menu button.delete-action{color:#ff6e8e}
+.card-dropdown-menu button.delete-action:hover{background:rgba(255,59,92,.18);color:#ff3b5c}
+
+/* Edit & Delete Modal Styles */
+.modal-overlay{position:fixed;inset:0;background:rgba(8,4,14,.75);backdrop-filter:blur(10px);z-index:9999;display:grid;place-items:center;padding:20px}
+.modal-dialog{width:100%;max-width:480px;background:#140e20;border:1px solid #4a356e;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.8),0 0 30px rgba(186,130,255,.2);padding:24px;color:#fff;display:flex;flex-direction:column;gap:18px}
+.modal-dialog h3{margin:0;font-size:18px;font-weight:700;color:#f7edff;letter-spacing:-.01em}
+.modal-field{display:flex;flex-direction:column;gap:6px}
+.modal-field label{font-size:12px;font-weight:700;color:#b7a9cb;text-transform:uppercase;letter-spacing:.04em}
+.modal-input{width:100%;box-sizing:border-box;background:#1e152f;border:1px solid #3d2b59;border-radius:10px;padding:10px 14px;color:#fff;font-size:13px;outline:none;transition:border-color .2s ease}
+.modal-input:focus{border-color:#ba82ff;box-shadow:0 0 10px rgba(186,130,255,.25)}
+.tag-editor-box{display:flex;flex-wrap:wrap;gap:6px;background:#191128;border:1px solid #3d2b59;border-radius:10px;padding:8px 10px;min-height:42px;align-items:center}
+.tag-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;background:rgba(186,130,255,.15);border:1px solid rgba(186,130,255,.35);color:#dcbfff;font-size:11px;font-weight:600}
+.tag-chip button{background:transparent;border:0;color:#ba82ff;font-size:12px;cursor:pointer;padding:0;line-height:1}
+.tag-chip button:hover{color:#ff5a84}
+.tag-add-row{display:flex;gap:6px;margin-top:6px}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px}
+.danger-button{padding:9px 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#e11d48,#be123c);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(225,29,72,.35);transition:all .2s ease}
+.danger-button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(225,29,72,.5)}
+
 /* Collections System Styles */
 .collections-header-bar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:26px}
 .collections-actions-group{display:flex;align-items:center;gap:12px;flex-wrap:wrap}

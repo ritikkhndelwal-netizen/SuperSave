@@ -6,6 +6,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_USER_COLLECTIONS, generateAutoCollections } from '../lib/collections';
 import type { Collection, SavedContent } from '../lib/types';
 import { AppShell } from './AppShell';
+import { CardActionMenu } from './CardActionMenu';
+import { EditContentModal } from './EditContentModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 export function DashboardClient({ items: initialItems }: { items: SavedContent[] }) {
   const searchParams = useSearchParams();
@@ -50,6 +53,27 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   const [savedSourceFilter, setSavedSourceFilter] = useState<'All' | 'YouTube' | 'Instagram' | 'Web' | 'Upload'>('All');
   const [savedSort, setSavedSort] = useState<'newest' | 'oldest' | 'title'>('newest');
   const [savedViewMode, setSavedViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Card Actions & Modals State
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<SavedContent | null>(null);
+  const [deletingItem, setDeletingItem] = useState<SavedContent | null>(null);
+
+  // Close card menu on document click or Escape
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openMenuId) setOpenMenuId(null);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && openMenuId) setOpenMenuId(null);
+    };
+    window.addEventListener('click', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenuId]);
 
   // Sync tab with URL query parameter on mount and when query changes
   useEffect(() => {
@@ -118,6 +142,61 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
       } catch {}
       return next;
     });
+  };
+
+  // Card Action triggers
+  const handleStartEdit = (item: SavedContent) => {
+    setEditingItem(item);
+  };
+
+  const handleStartDelete = (item: SavedContent) => {
+    setDeletingItem(item);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingItem) return;
+    try {
+      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${api}/api/content/${deletingItem.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete card');
+      }
+
+      const deletedId = deletingItem.id;
+
+      // Optimistically remove from state
+      setItems((current) => current.filter((it) => it.id !== deletedId));
+
+      // Remove from favorites
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        next.delete(deletedId);
+        try {
+          localStorage.setItem('supersave_favorites', JSON.stringify(Array.from(next)));
+        } catch {}
+        return next;
+      });
+
+      // Remove from user collections
+      setUserCollections((prev) => {
+        const next = prev.map((c) => ({
+          ...c,
+          itemIds: c.itemIds.filter((id) => id !== deletedId),
+        }));
+        try {
+          localStorage.setItem('supersave_user_collections', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      setDeletingItem(null);
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Failed to delete card. Please ensure the backend is running.');
+    }
   };
 
   // Auto-Collections Toggle
@@ -490,6 +569,15 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                     {isFav ? '♥' : '♡'}
                   </button>
 
+                  <CardActionMenu
+                    itemId={item.id}
+                    item={item}
+                    openMenuId={openMenuId}
+                    setOpenMenuId={setOpenMenuId}
+                    onEdit={handleStartEdit}
+                    onDelete={handleStartDelete}
+                  />
+
                   <Link href={`/note/${item.id}`} className="content-card">
                     <div
                       className="thumbnail"
@@ -704,6 +792,15 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                       {isFav ? '♥' : '♡'}
                     </button>
 
+                    <CardActionMenu
+                      itemId={item.id}
+                      item={item}
+                      openMenuId={openMenuId}
+                      setOpenMenuId={setOpenMenuId}
+                      onEdit={handleStartEdit}
+                      onDelete={handleStartDelete}
+                    />
+
                     <Link href={`/note/${item.id}`} className="content-card">
                       <div
                         className="thumbnail"
@@ -768,6 +865,16 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                       >
                         {isFav ? '♥' : '♡'}
                       </button>
+                      <CardActionMenu
+                        itemId={item.id}
+                        item={item}
+                        openMenuId={openMenuId}
+                        setOpenMenuId={setOpenMenuId}
+                        onEdit={handleStartEdit}
+                        onDelete={handleStartDelete}
+                        style={{ position: 'static', width: 28, height: 28 }}
+                        dropdownStyle={{ top: '36px', right: 0 }}
+                      />
                     </div>
                   </Link>
                 );
@@ -864,6 +971,14 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                           >
                             {isFav ? '♥' : '♡'}
                           </button>
+                          <CardActionMenu
+                            itemId={item.id}
+                            item={item}
+                            openMenuId={openMenuId}
+                            setOpenMenuId={setOpenMenuId}
+                            onEdit={handleStartEdit}
+                            onDelete={handleStartDelete}
+                          />
                           <Link href={`/note/${item.id}`} className="content-card">
                             <div
                               className="thumbnail"
@@ -1170,6 +1285,14 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                     >
                       ♥
                     </button>
+                    <CardActionMenu
+                      itemId={item.id}
+                      item={item}
+                      openMenuId={openMenuId}
+                      setOpenMenuId={setOpenMenuId}
+                      onEdit={handleStartEdit}
+                      onDelete={handleStartDelete}
+                    />
 
                     <Link href={`/note/${item.id}`} className="content-card">
                       <div
@@ -1381,6 +1504,28 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
             </form>
           </div>
         </div>
+      )}
+
+      {editingItem && (
+        <EditContentModal
+          item={editingItem}
+          isOpen={Boolean(editingItem)}
+          onClose={() => setEditingItem(null)}
+          onSuccess={(updated) => {
+            setItems((current) =>
+              current.map((it) => (it.id === updated.id ? { ...it, ...updated } : it))
+            );
+          }}
+        />
+      )}
+
+      {deletingItem && (
+        <DeleteConfirmModal
+          item={deletingItem}
+          isOpen={Boolean(deletingItem)}
+          onClose={() => setDeletingItem(null)}
+          onConfirm={handleConfirmDelete}
+        />
       )}
     </AppShell>
   );
