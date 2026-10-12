@@ -194,8 +194,29 @@
     // 1b. Smart Copy-to-Save Prompt on Clipboard Copy
     // -------------------------------------------------------------
     const COPY_PROMPT_ID = 'supersave-copy-prompt';
+    function isValidSaveUrl(url) {
+        if (!url || typeof url !== 'string')
+            return false;
+        const trimmed = url.trim();
+        if (!/^https?:\/\//i.test(trimmed))
+            return false;
+        if (/\s/.test(trimmed))
+            return false;
+        try {
+            const parsed = new URL(trimmed);
+            if (parsed.hostname === 'localhost' ||
+                parsed.hostname === '127.0.0.1' ||
+                parsed.hostname === '0.0.0.0') {
+                return false;
+            }
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        }
+        catch {
+            return false;
+        }
+    }
     function showCopyPrompt(url) {
-        if (!url || !url.startsWith('http'))
+        if (!isValidSaveUrl(url))
             return;
         let prompt = document.getElementById(COPY_PROMPT_ID);
         if (prompt) {
@@ -598,41 +619,115 @@
     // -------------------------------------------------------------
     // 8. Smart Copy-to-Save Triggers (Clipboard & Native Copy Buttons)
     // -------------------------------------------------------------
-    // Listen to any copy event on the page
-    document.addEventListener('copy', () => {
-        window.setTimeout(async () => {
-            try {
-                const text = await navigator.clipboard.readText();
-                const trimmed = (text || '').trim();
-                if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-                    showCopyPrompt(trimmed);
+    // Fallback inline main-world script injection (in addition to manifest content_scripts)
+    function injectMainWorldBridge() {
+        try {
+            const script = document.createElement('script');
+            script.textContent = `
+        (() => {
+          if (window.__supersave_interceptor_loaded) return;
+          window.__supersave_interceptor_loaded = true;
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            const orig = navigator.clipboard.writeText.bind(navigator.clipboard);
+            navigator.clipboard.writeText = function(text) {
+              try {
+                if (text && typeof text === 'string') {
+                  window.postMessage({ type: 'SUPERSAVE_CLIPBOARD_WRITE', text }, '*');
                 }
+              } catch (_) {}
+              return orig(text);
+            };
+          }
+          if (typeof document.execCommand === 'function') {
+            const origExec = document.execCommand.bind(document);
+            document.execCommand = function(cmd, showUI, val) {
+              if (typeof cmd === 'string' && cmd.toLowerCase() === 'copy') {
+                try {
+                  const sel = window.getSelection ? window.getSelection().toString() : '';
+                  if (sel) {
+                    window.postMessage({ type: 'SUPERSAVE_CLIPBOARD_WRITE', text: sel }, '*');
+                  }
+                } catch (_) {}
+              }
+              return origExec(cmd, showUI, val);
+            };
+          }
+        })();
+      `;
+            (document.head || document.documentElement).appendChild(script);
+            script.remove();
+        }
+        catch (_) { }
+    }
+    injectMainWorldBridge();
+    // A. Listen for postMessages from MAIN-world interceptor (Instagram, Twitter, Reddit, Amazon, etc.)
+    window.addEventListener('message', (event) => {
+        if (event.source !== window)
+            return;
+        if (event.data?.type === 'SUPERSAVE_CLIPBOARD_WRITE') {
+            const text = String(event.data.text || '').trim();
+            if (isValidSaveUrl(text)) {
+                showCopyPrompt(text);
             }
-            catch {
-                const selected = (window.getSelection()?.toString() || '').trim();
-                if (selected.startsWith('http://') || selected.startsWith('https://')) {
-                    showCopyPrompt(selected);
-                }
-            }
-        }, 120);
+        }
     });
-    // Also listen for clicks on any "Copy" or "Copy Link" buttons (e.g. YouTube Share Dialog)
+    // B. Native DOM 'copy' event (user highlighted URL & pressed Ctrl+C or Right-click -> Copy)
+    document.addEventListener('copy', () => {
+        let copiedText = '';
+        const active = document.activeElement;
+        if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+            const start = active.selectionStart ?? 0;
+            const end = active.selectionEnd ?? 0;
+            if (end > start) {
+                copiedText = active.value.substring(start, end);
+            }
+            else if (isValidSaveUrl(active.value)) {
+                copiedText = active.value;
+            }
+        }
+        if (!copiedText) {
+            copiedText = window.getSelection()?.toString() || '';
+        }
+        copiedText = copiedText.trim();
+        if (isValidSaveUrl(copiedText)) {
+            showCopyPrompt(copiedText);
+        }
+    });
+    // C. Click listener for any "Copy Link" / "Copy URL" buttons or share menus
     document.addEventListener('click', (e) => {
         const target = e.target;
         if (!target)
             return;
-        const copyBtn = target.closest('#copy-button, button[aria-label*="Copy" i], [aria-label*="copy link" i], [title*="Copy" i], ytd-button-renderer#copy-button');
-        if (copyBtn) {
-            window.setTimeout(async () => {
-                const shareInput = document.querySelector('#share-url');
-                let url = shareInput?.value || '';
-                if (!url && navigator.clipboard) {
-                    url = await navigator.clipboard.readText().catch(() => '');
+        const clickable = target.closest('button, [role="button"], [role="menuitem"], a, #copy-button, ytd-button-renderer#copy-button');
+        if (!clickable)
+            return;
+        const text = (clickable.textContent || '').trim().toLowerCase();
+        const aria = (clickable.getAttribute('aria-label') || '').toLowerCase();
+        const title = (clickable.getAttribute('title') || '').toLowerCase();
+        const combined = `${text} ${aria} ${title}`;
+        const isCopyTrigger = combined.includes('copy link') ||
+            combined.includes('copy url') ||
+            combined.includes('copy share link') ||
+            combined.includes('copy video url') ||
+            (combined.includes('copy') && (combined.includes('link') || combined.includes('url')));
+        if (isCopyTrigger) {
+            window.setTimeout(() => {
+                // Check for nearby or modal URL input
+                const shareInput = document.querySelector('#share-url, input[id*="share" i], input[value^="http"], input[readonly][value*="http"]');
+                if (shareInput && isValidSaveUrl(shareInput.value)) {
+                    showCopyPrompt(shareInput.value.trim());
+                    return;
                 }
-                if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-                    showCopyPrompt(url.trim());
+                // Check if inside a post card / dialog with a permalink
+                const container = clickable.closest('article, [data-testid="tweet"], div[role="dialog"]');
+                if (container) {
+                    const anchor = container.querySelector('a[href*="/p/"], a[href*="/reel/"], a[href*="/status/"], a[href*="/comments/"], a[href*="/dp/"]');
+                    if (anchor?.href && isValidSaveUrl(anchor.href)) {
+                        showCopyPrompt(anchor.href);
+                        return;
+                    }
                 }
-            }, 150);
+            }, 100);
         }
     }, true);
 })();
