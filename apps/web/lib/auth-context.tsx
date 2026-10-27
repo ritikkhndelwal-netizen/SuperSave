@@ -68,10 +68,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) {
       return { error: new Error('Supabase client not initialized') };
     }
+    const origin =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+
+    const cleanOrigin = origin.replace(/\/+$/, '');
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard`,
+        redirectTo: `${cleanOrigin}/dashboard`,
       },
     });
     return { error: error ? new Error(error.message) : null };
