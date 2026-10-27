@@ -429,7 +429,11 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   }
 
   return (
-    <AppShell activeTab={activeNavTab} onTabChange={handleTabChange}>
+    <AppShell
+      activeTab={activeNavTab}
+      onTabChange={handleTabChange}
+      onSaveClick={() => setShowAdd(true)}
+    >
       {/* Toast Notification for Auto-Collections Toggle */}
       {autoToggleToast && (
         <div

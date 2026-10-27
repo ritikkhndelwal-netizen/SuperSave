@@ -117,7 +117,7 @@ export default function LandingPage() {
             <span style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '-0.03em', color: '#fff' }}>SuperSave</span>
           </Link>
 
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
+          <nav className="landing-desktop-nav" style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
             <a href="#features" style={{ fontSize: '13px', color: '#a69cb0', textDecoration: 'none' }}>Features</a>
             <a href="#how-it-works" style={{ fontSize: '13px', color: '#a69cb0', textDecoration: 'none' }}>How it Works</a>
             <a href="#mobile" style={{ fontSize: '13px', color: '#a69cb0', textDecoration: 'none' }}>Android & Extension</a>
@@ -327,7 +327,7 @@ export default function LandingPage() {
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: '24px', padding: '26px' }}>
+          <div className="landing-demo-grid">
             {/* Left Column: Media + Summary */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>

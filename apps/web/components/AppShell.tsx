@@ -23,10 +23,12 @@ export function AppShell({
   children,
   activeTab,
   onTabChange,
+  onSaveClick,
 }: {
   children: React.ReactNode;
   activeTab?: string;
   onTabChange?: (tab: 'dashboard' | 'saved' | 'collections' | 'favorites') => void;
+  onSaveClick?: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -35,6 +37,111 @@ export function AppShell({
 
   return (
     <div className="app-shell">
+      {/* Mobile Top Header (<= 768px) */}
+      <header className="mobile-header">
+        <Link
+          href="/dashboard"
+          className="brand"
+          onClick={(e) => {
+            if (onTabChange) {
+              e.preventDefault();
+              onTabChange('dashboard');
+            }
+          }}
+        >
+          <span className="brand-mark">S</span>
+          <span style={{ fontSize: '16px' }}>SuperSave</span>
+        </Link>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {onSaveClick && (
+            <button
+              type="button"
+              onClick={onSaveClick}
+              className="mobile-header-save-btn"
+              aria-label="Save Content"
+            >
+              <span>+</span> Save
+            </button>
+          )}
+
+          <div
+            style={{ position: 'relative' }}
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+          >
+            <div
+              className="avatar"
+              style={{ width: '32px', height: '32px', fontSize: '11px', cursor: 'pointer' }}
+              title="Account"
+            >
+              {avatarInitials}
+            </div>
+
+            {showProfileMenu && (
+              <div
+                className="mobile-profile-dropdown"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <strong style={{ display: 'block', fontSize: '13px', color: '#fff' }}>{displayName}</strong>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: '11px',
+                      color: '#8b8496',
+                      textOverflow: 'ellipsis',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {displayEmail}
+                  </span>
+                </div>
+                {user ? (
+                  <button
+                    onClick={async () => {
+                      setShowProfileMenu(false);
+                      await signOut();
+                      router.push('/login');
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '10px 14px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#f87171',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Log out
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={() => setShowProfileMenu(false)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '10px 14px',
+                      color: '#a855f7',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Log in / Sign up →
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Desktop Sidebar (hidden on mobile <= 768px) */}
       <aside className="sidebar">
         <Link
           href="/dashboard"
@@ -174,7 +281,45 @@ export function AppShell({
         </div>
       </aside>
 
+      {/* Main Content Area */}
       <main className="main-content">{children}</main>
+
+      {/* Mobile Bottom Dock Bar (<= 768px) */}
+      <nav className="mobile-bottom-nav">
+        {navItems.map((item) => {
+          const isActive = activeTab
+            ? activeTab === item.id
+            : pathname === '/dashboard' && item.id === 'dashboard';
+
+          if (onTabChange) {
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  onTabChange(item.id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`mobile-nav-item ${isActive ? 'active' : ''}`}
+              >
+                <span className="mobile-nav-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={`mobile-nav-item ${isActive ? 'active' : ''}`}
+            >
+              <span className="mobile-nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }
