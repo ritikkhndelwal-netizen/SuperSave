@@ -303,32 +303,21 @@ function seed(
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'supersave-api' }));
 
-app.get('/api/content', (req, res) => {
+app.get('/api/content', async (req, res) => {
   const q = String(req.query.q || '').toLowerCase().trim();
   const user = (req as unknown as { user?: { id: string } }).user;
   const userId = user?.id;
 
-  const items = Array.from(store.values()).filter((item) => {
-    // Multi-tenant isolation:
-    // If authenticated: return user's own items + public demo items (where item.userId is null/undefined)
-    // If unauthenticated: ONLY return public demo items (where item.userId is null/undefined)
-    if (userId) {
-      if (item.userId && item.userId !== userId) {
-        return false;
-      }
-    } else {
-      if (item.userId) {
-        return false;
-      }
-    }
+  const rawItems = await store.valuesAsync(userId);
+  const items = rawItems.filter((item) => {
     return !q || `${item.title} ${item.summary} ${item.notes} ${(item.tags || []).join(' ')}`.toLowerCase().includes(q);
   });
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json({ items });
 });
 
-app.get('/api/content/:id', (req, res) => {
-  const item = store.get(req.params.id);
+app.get('/api/content/:id', async (req, res) => {
+  const item = await store.getAsync(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
   const auth = checkItemOwnership(item, req, true);
   if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
@@ -473,9 +462,9 @@ app.post('/api/content', extractionLimiter, async (req: Request, res: Response) 
   return res.status(202).json({ item });
 });
 
-app.post('/api/content/:id/retry', extractionLimiter, (req: Request, res: Response) => {
+app.post('/api/content/:id/retry', extractionLimiter, async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const item = store.get(id);
+  const item = await store.getAsync(id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
 
   const auth = checkItemOwnership(item, req, false);
@@ -489,9 +478,9 @@ app.post('/api/content/:id/retry', extractionLimiter, (req: Request, res: Respon
   return res.json({ ok: true, item });
 });
 
-app.patch('/api/content/:id', (req: Request, res: Response) => {
+app.patch('/api/content/:id', async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const item = store.get(id);
+  const item = await store.getAsync(id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
 
   const auth = checkItemOwnership(item, req, false);
@@ -520,9 +509,9 @@ app.patch('/api/content/:id', (req: Request, res: Response) => {
   return res.json({ ok: true, item });
 });
 
-app.delete('/api/content/:id', (req: Request, res: Response) => {
+app.delete('/api/content/:id', async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const item = store.get(id);
+  const item = await store.getAsync(id);
   if (!item) {
     return res.status(404).json({ error: 'Content not found' });
   }
@@ -534,8 +523,8 @@ app.delete('/api/content/:id', (req: Request, res: Response) => {
   return res.json({ ok: true, deletedId: id });
 });
 
-app.patch('/api/content/:id/notes', (req, res) => {
-  const item = store.get(req.params.id);
+app.patch('/api/content/:id/notes', async (req, res) => {
+  const item = await store.getAsync(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
 
   const auth = checkItemOwnership(item, req, false);
@@ -547,7 +536,7 @@ app.patch('/api/content/:id/notes', (req, res) => {
 });
 
 app.post('/api/content/:id/qa', async (req, res) => {
-  const item = store.get(req.params.id);
+  const item = await store.getAsync(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
 
   const auth = checkItemOwnership(item, req, true);
@@ -574,7 +563,7 @@ app.post('/api/content/:id/qa', async (req, res) => {
 });
 
 app.post('/api/content/:id/translate', async (req, res) => {
-  const item = store.get(req.params.id);
+  const item = await store.getAsync(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
 
   const auth = checkItemOwnership(item, req, true);

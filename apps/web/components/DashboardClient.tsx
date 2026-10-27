@@ -252,12 +252,12 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
     apiFetch('/api/content')
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then((data: { items: SavedContent[] }) => {
-        if (data.items && data.items.length) {
+        if (data && Array.isArray(data.items)) {
           setItems(data.items);
         }
       })
       .catch(() => setItems(initialItems));
-  }, [initialItems]);
+  }, [initialItems, user]);
 
   // Polling mechanism: If any item is in 'processing' status, poll every 3s until ready
   useEffect(() => {
