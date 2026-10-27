@@ -7,6 +7,13 @@
 *.pem
 *.key
 
+# Database & Persistent Stores
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/
+
 # Dependencies
 node_modules/
 .pnp/
@@ -82,3 +89,6 @@ desktop.ini
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# markdown
+*.md

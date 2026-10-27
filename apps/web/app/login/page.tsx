@@ -7,7 +7,7 @@ export default function LoginPage() {
   return <main className="auth-page">
     <div className="auth-glow" />
     <div className="auth-card">
-      <Link href="/dashboard" className="brand auth-brand"><span className="brand-mark">R</span><span>ReelMind</span></Link>
+      <Link href="/dashboard" className="brand auth-brand"><span className="brand-mark">S</span><span>SuperSave</span></Link>
       <div className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : 'CREATE YOUR LIBRARY'}</div>
       <h1>{mode === 'login' ? 'Your saved content, waiting for you.' : 'Build a knowledge library from what you save.'}</h1>
       <p className="muted">Capture from the web, turn content into notes, then ask your own library questions.</p>

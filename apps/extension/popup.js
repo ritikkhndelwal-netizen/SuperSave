@@ -1,7 +1,12 @@
 "use strict";
 (() => {
-    const APP_URL = 'http://localhost:3000';
-    const API_URL = 'http://localhost:4000';
+    async function getConfig() {
+        const sync = (await chrome.storage.sync.get(['appUrl', 'apiUrl']));
+        return {
+            appUrl: sync.appUrl || 'http://localhost:3000',
+            apiUrl: sync.apiUrl || 'http://localhost:4000',
+        };
+    }
     const statusEl = document.getElementById('status');
     const pageEl = document.getElementById('page');
     const urlInput = document.getElementById('url-input');
@@ -13,8 +18,9 @@
         if (!url || !url.startsWith('http')) {
             return { ok: false, error: 'Cannot save this URL (must start with http/https).' };
         }
+        const { apiUrl } = await getConfig();
         try {
-            const response = await fetch(`${API_URL}/api/content`, {
+            const response = await fetch(`${apiUrl}/api/content`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ url }),
@@ -26,7 +32,7 @@
             return { ok: true };
         }
         catch {
-            return { ok: false, error: 'Cannot connect to API at http://localhost:4000.' };
+            return { ok: false, error: `Cannot connect to API at ${apiUrl}.` };
         }
     }
     // Detect active tab URL
@@ -110,8 +116,9 @@
     }
     // Open knowledge library
     if (openButton) {
-        openButton.addEventListener('click', () => {
-            chrome.tabs.create({ url: `${APP_URL}/dashboard` });
+        openButton.addEventListener('click', async () => {
+            const { appUrl } = await getConfig();
+            chrome.tabs.create({ url: `${appUrl}/dashboard` });
         });
     }
 })();

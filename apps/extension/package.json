@@ -1,5 +1,5 @@
 {
-  "name": "@reelmind/extension",
+  "name": "@supersave/extension",
   "private": true,
   "scripts": {
     "build": "tsc && node -e \"const fs=require('fs'); ['content.js','background.js','popup.js','interceptor.js'].forEach(f=>fs.copyFileSync('dist/'+f, f));\"",

@@ -6,8 +6,12 @@ import urllib.request
 import logging
 from typing import Optional
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Load environment variables
 load_dotenv()
@@ -37,20 +41,31 @@ from .gemini_client import GeminiService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("supersave.ai")
 
-app = FastAPI(title="SuperSave AI Service", version="0.3.0")
+# --- Security: Rate limiting ---
+limiter = Limiter(key_func=get_remote_address)
 
+app = FastAPI(title="SuperSave AI Service", version="0.3.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- Security: Restrict CORS to known origins ---
+ALLOWED_ORIGINS = [
+    os.getenv("NEXT_PUBLIC_APP_URL", "http://localhost:3000"),
+    os.getenv("API_GATEWAY_URL", "http://localhost:4000"),
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 gemini = GeminiService()
 
 @app.get("/health")
-def health():
+@limiter.limit("20/minute")
+def health(request: Request):
     return {
         "ok": True,
         "service": "supersave-ai",
@@ -59,12 +74,13 @@ def health():
     }
 
 @app.post("/metadata", response_model=FastMetadataResponse)
-def get_metadata(request: FastMetadataRequest):
+@limiter.limit("20/minute")
+def get_metadata(request: Request, body: FastMetadataRequest):
     """
     Step 1: Ultra-fast metadata retrieval (<400ms).
     Used to immediately capture and display the title, creator, thumbnail, and embed player.
     """
-    url = request.source_url.strip()
+    url = body.source_url.strip()
     return get_fast_metadata(url)
 
 def is_valid_media_image(img_url: Optional[str]) -> bool:
@@ -83,13 +99,14 @@ def is_valid_media_image(img_url: Optional[str]) -> bool:
     return False
 
 @app.post("/extract", response_model=ExtractResponse)
-def extract_content(request: ExtractRequest):
+@limiter.limit("5/minute")
+def extract_content(request: Request, body: ExtractRequest):
     """
     Step 2: Deep multimodal extraction covering all 14 intelligence dimensions.
     """
-    url = request.source_url.strip()
-    mode = request.mode or "video_lowres"
-    client_meta = request.client_meta or {}
+    url = body.source_url.strip()
+    mode = body.mode or "video_lowres"
+    client_meta = body.client_meta or {}
     logger.info(f"Extract requested for: {url} (mode: {mode}, has_client_meta: {bool(client_meta)})")
 
     # Step A: Get fast metadata first so we always have title, thumbnail, and embed player
@@ -308,11 +325,12 @@ Saved content from **{fast_meta.author or source}**.
     )
 
 @app.post("/qa", response_model=QAResponse)
-def answer_question(request: QARequest):
+@limiter.limit("15/minute")
+def answer_question(request: Request, body: QARequest):
     """
     Answers interactive questions grounded in the note's context with optional Web Search expansion.
     """
-    qa_result = gemini.answer_question(request.question, request.context, search_mode=request.search_mode)
+    qa_result = gemini.answer_question(body.question, body.context, search_mode=body.search_mode)
     return QAResponse(
         answer=qa_result["answer"],
         search_mode=qa_result.get("search_mode", "note_only"),
@@ -320,9 +338,10 @@ def answer_question(request: QARequest):
     )
 
 @app.post("/translate", response_model=TranslateResponse)
-def translate(request: TranslateRequest):
+@limiter.limit("10/minute")
+def translate(request: Request, body: TranslateRequest):
     """
     Translates notes or summaries into the requested target language.
     """
-    translated = gemini.translate_content(request.text, request.target_language)
-    return TranslateResponse(translated_text=translated, target_language=request.target_language)
+    translated = gemini.translate_content(body.text, body.target_language)
+    return TranslateResponse(translated_text=translated, target_language=body.target_language)

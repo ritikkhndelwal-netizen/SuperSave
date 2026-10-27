@@ -1,7 +1,12 @@
 "use strict";
 (() => {
-    const APP_URL = 'http://localhost:3000';
-    const API_URL = 'http://localhost:4000';
+    async function getConfig() {
+        const sync = (await chrome.storage.sync.get(['appUrl', 'apiUrl']));
+        return {
+            appUrl: sync.appUrl || 'http://localhost:3000',
+            apiUrl: sync.apiUrl || 'http://localhost:4000',
+        };
+    }
     chrome.runtime.onInstalled.addListener(() => {
         chrome.contextMenus.create({
             id: 'super-save-page',
@@ -13,12 +18,13 @@
         const url = info.linkUrl || info.pageUrl || tab?.url;
         if (!url)
             return;
+        const { appUrl } = await getConfig();
         const result = await saveUrlToApi(url);
         if (result.ok) {
             chrome.action.setBadgeText({ text: '✓' });
             chrome.action.setBadgeBackgroundColor({ color: '#7c3aed' });
             setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
-            chrome.tabs.create({ url: `${APP_URL}/dashboard?saved=1` });
+            chrome.tabs.create({ url: `${appUrl}/dashboard?saved=1` });
         }
         else {
             chrome.action.setBadgeText({ text: '✕' });
@@ -38,8 +44,9 @@
         if (!url || !url.startsWith('http')) {
             return { ok: false, error: 'Cannot save this URL type (must start with http/https).' };
         }
+        const { apiUrl } = await getConfig();
         try {
-            const response = await fetch(`${API_URL}/api/content`, {
+            const response = await fetch(`${apiUrl}/api/content`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ url, client_meta }),
@@ -51,7 +58,7 @@
             return { ok: true, data };
         }
         catch {
-            return { ok: false, error: 'Cannot connect to API server at http://localhost:4000.' };
+            return { ok: false, error: `Cannot connect to API server at ${apiUrl}.` };
         }
     }
 })();
