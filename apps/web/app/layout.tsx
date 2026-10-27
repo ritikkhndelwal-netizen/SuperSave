@@ -8,6 +8,11 @@ export const metadata = {
     icon: '/icon.svg',
     apple: '/icon.svg',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'SuperSave',
+  },
 };
 
 export const viewport = {

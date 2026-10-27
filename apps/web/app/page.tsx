@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '../lib/auth-context';
+import { InstallAppBanner } from '../components/InstallAppBanner';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -601,6 +602,9 @@ export default function LandingPage() {
       <footer style={{ borderTop: '1px solid #1b1626', padding: '32px 24px', textAlign: 'center', color: '#6d6379', fontSize: '12px' }}>
         <p style={{ margin: 0 }}>© {new Date().getFullYear()} SuperSave. Powered by Gemini 3.5 & Supabase.</p>
       </footer>
+
+      {/* Mobile PWA Install App Popup */}
+      <InstallAppBanner />
     </div>
   );
 }

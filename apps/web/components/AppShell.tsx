@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
+import { InstallAppBanner } from './InstallAppBanner';
 
 export interface NavItem {
   id: 'dashboard' | 'saved' | 'collections' | 'favorites';
@@ -320,6 +321,9 @@ export function AppShell({
           );
         })}
       </nav>
+
+      {/* Mobile PWA Install App Popup */}
+      <InstallAppBanner />
     </div>
   );
 }

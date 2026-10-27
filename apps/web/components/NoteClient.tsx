@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { SavedContent } from '../lib/types';
 import { MarkdownView } from './MarkdownView';
@@ -32,9 +33,11 @@ function resolveResourceUrl(reference?: string, name?: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(`${title} ${ref}`.trim())}`;
 }
 
-export function NoteClient({ item: initialItem }: { item: SavedContent }) {
-  const [item, setItem] = useState<SavedContent>(initialItem);
-  const [personalNote, setPersonalNote] = useState(initialItem.personalNote);
+export function NoteClient({ id, item: initialItem }: { id?: string; item?: SavedContent }) {
+  const [item, setItem] = useState<SavedContent | null>(initialItem || null);
+  const [personalNote, setPersonalNote] = useState(initialItem?.personalNote || '');
+  const [fetching, setFetching] = useState(!initialItem);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,9 +52,42 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
     }
   }, [user, authLoading, router]);
 
+  // Client-side authenticated fetch if item not provided by server SSR
+  useEffect(() => {
+    if (!item && id && user) {
+      setFetching(true);
+      setFetchError(null);
+      apiFetch(`/api/content/${id}`)
+        .then(async (res) => {
+          if (!res.ok) {
+            if (res.status === 404 || res.status === 403) {
+              throw new Error('This note could not be found or you do not have permission to view it.');
+            }
+            throw new Error(`Failed to load note (${res.status})`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (data?.item) {
+            setItem(data.item);
+            setPersonalNote(data.item.personalNote || '');
+          } else {
+            throw new Error('Note data is unavailable');
+          }
+        })
+        .catch((err) => {
+          setFetchError(err.message);
+        })
+        .finally(() => {
+          setFetching(false);
+        });
+    }
+  }, [id, item, user]);
+
   // Favorite state synced with localStorage
   const [isFav, setIsFav] = useState(false);
   useEffect(() => {
+    if (!item?.id) return;
     try {
       const savedFavs = localStorage.getItem('supersave_favorites');
       if (savedFavs) {
@@ -59,9 +95,10 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
         setIsFav(favSet.has(item.id));
       }
     } catch {}
-  }, [item.id]);
+  }, [item?.id]);
 
   const handleToggleFavorite = () => {
+    if (!item) return;
     setIsFav((prev) => {
       const next = !prev;
       try {
@@ -80,6 +117,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const handleConfirmDelete = async () => {
+    if (!item) return;
     try {
       const response = await apiFetch(`/api/content/${item.id}`, {
         method: 'DELETE',
@@ -147,7 +185,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
 
   // Live polling if the item is still processing
   useEffect(() => {
-    if (item.status !== 'processing') return;
+    if (!item || item.status !== 'processing') return;
 
     const interval = window.setInterval(() => {
       apiFetch(`/api/content/${item.id}`)
@@ -164,9 +202,10 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [item.id, item.status, personalNote]);
+  }, [item?.id, item?.status, personalNote]);
 
   async function savePersonalNote() {
+    if (!item) return;
     setSaveState('Saving…');
     try {
       const response = await apiFetch(`/api/content/${item.id}/notes`, {
@@ -183,7 +222,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   }
 
   async function ask() {
-    if (!question.trim()) return;
+    if (!item || !question.trim()) return;
     setLoading(true);
     setAnswer('');
     setQaSources([]);
@@ -206,6 +245,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   }
 
   async function handleTranslate() {
+    if (!item) return;
     setTranslating(true);
     try {
       const response = await apiFetch(`/api/content/${item.id}/translate`, {
@@ -228,6 +268,45 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
     setCopiedSnippet(index);
     setTimeout(() => setCopiedSnippet(null), 2000);
   };
+
+  if (fetching) {
+    return (
+      <div style={{ padding: '80px 20px', textAlign: 'center', color: '#ba82ff' }}>
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 14,
+            margin: '0 auto 16px',
+            background: 'linear-gradient(135deg, #ba82ff, #7444d7)',
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: 24,
+            boxShadow: '0 8px 24px rgba(135, 82, 233, 0.4)',
+          }}
+        >
+          ⚡
+        </div>
+        <h3 style={{ fontSize: 16, color: '#f3e8ff', margin: '0 0 6px' }}>Loading Knowledge Note…</h3>
+        <p style={{ fontSize: 12.5, color: '#a69cb0', margin: 0 }}>
+          Retrieving your multimodal analysis and code snippets…
+        </p>
+      </div>
+    );
+  }
+
+  if (fetchError || !item) {
+    return (
+      <div className="empty-state-card" style={{ marginTop: '30px' }}>
+        <span className="empty-icon">🔍</span>
+        <h3>Note Not Found</h3>
+        <p>{fetchError || 'This content may have been removed or belongs to another account.'}</p>
+        <Link href="/dashboard" className="primary-button" style={{ display: 'inline-block', padding: '10px 20px', textDecoration: 'none' }}>
+          Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   const isProcessing = item.status === 'processing';
 

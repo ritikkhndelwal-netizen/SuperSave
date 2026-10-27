@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { AppShell } from '../../../components/AppShell';
 import { NoteClient } from '../../../components/NoteClient';
 
@@ -15,7 +14,19 @@ export default async function NotePage({ params }: { params: Promise<{ id: strin
       const data = await response.json();
       item = data.item;
     }
-  } catch { /* API may be offline */ }
-  if (!item) notFound();
-  return <AppShell><div className="note-page"><Link href="/dashboard" className="back-link">← Back to library</Link><NoteClient item={item} /></div></AppShell>;
+  } catch {
+    /* If API is offline or requires client authentication, NoteClient will fetch with user token */
+  }
+
+  return (
+    <AppShell>
+      <div className="note-page">
+        <Link href="/dashboard" className="back-link">
+          ← Back to library
+        </Link>
+        <NoteClient id={id} item={item || undefined} />
+      </div>
+    </AppShell>
+  );
 }
+
