@@ -1,4 +1,4 @@
-# ReelMind MVP — 48 hour ship checklist
+# SuperSave MVP — 48 hour ship checklist
 
 ## Must ship
 - [x] Website dashboard shell
@@ -17,13 +17,14 @@
 - [x] FastAPI AI contract
 - [x] Real video downloader/scraper (yt-dlp 480p video & audio streaming)
 - [x] Gemini multimodal media extraction (Files API + gemini-3.5-flash-lite)
-- [ ] Persistent Postgres data
-- [ ] Real authentication
-- [ ] Cloud deployment
+- [x] Persistent Postgres data (Supabase PostgreSQL live sync)
+- [x] Android System Share Target (PWA Web Share Target)
+- [x] Real authentication (Supabase Auth + Google OAuth + Email/Password)
+- [x] Cloud deployment (Dockerfiles, Docker Compose, & Vercel/Railway configs)
 
 ## Demo path
 1. Open extension on Instagram/YouTube.
-2. Click **Save to ReelMind**.
+2. Click **Save to SuperSave**.
 3. Open the website.
 4. Search the saved library.
 5. Open a note.

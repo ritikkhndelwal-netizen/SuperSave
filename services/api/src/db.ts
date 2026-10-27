@@ -72,6 +72,7 @@ export class ContentDatabase {
         for (const row of data) {
           const item = (row.data as Item) || {
             id: row.id,
+            userId: row.user_id || undefined,
             url: row.url,
             status: row.status,
             title: row.title,
@@ -147,8 +148,9 @@ export class ContentDatabase {
           .from('content_items')
           .upsert({
             id,
-          url: item.url,
-          status: item.status,
+            user_id: item.userId || null,
+            url: item.url,
+            status: item.status,
           title: item.title || '',
           content_type: item.content_type || 'general',
           category: item.category || 'General',

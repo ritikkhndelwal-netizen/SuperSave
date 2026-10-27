@@ -9,9 +9,18 @@ import { AppShell } from './AppShell';
 import { CardActionMenu } from './CardActionMenu';
 import { EditContentModal } from './EditContentModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { useAuth } from '../lib/auth-context';
 
 export function DashboardClient({ items: initialItems }: { items: SavedContent[] }) {
   const searchParams = useSearchParams();
+  const { displayName } = useAuth();
+
+  const timeGreeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
 
   // Navigation tab state: 'dashboard' | 'saved' | 'collections' | 'favorites'
   const [activeNavTab, setActiveNavTab] = useState<'dashboard' | 'saved' | 'collections' | 'favorites'>('dashboard');
@@ -432,7 +441,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
           <header className="topbar">
             <div>
               <div className="eyebrow">YOUR KNOWLEDGE HUB</div>
-              <h1>Good evening, Ritik.</h1>
+              <h1>{timeGreeting}, {displayName}.</h1>
               <p className="muted">Turn the things you save into things you remember.</p>
             </div>
             <button className="primary-button" onClick={() => setShowAdd(true)}>

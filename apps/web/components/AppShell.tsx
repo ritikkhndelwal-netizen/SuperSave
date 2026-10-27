@@ -1,7 +1,7 @@
-'use client';
-
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '../lib/auth-context';
 
 export interface NavItem {
   id: 'dashboard' | 'saved' | 'collections' | 'favorites';
@@ -27,6 +27,9 @@ export function AppShell({
   onTabChange?: (tab: 'dashboard' | 'saved' | 'collections' | 'favorites') => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, displayName, displayEmail, avatarInitials, signOut } = useAuth();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   return (
     <div className="app-shell">
@@ -89,13 +92,82 @@ export function AppShell({
               <p>Install Chrome extension or paste any URL.</p>
             </div>
           </div>
-          <div className="profile-row">
-            <div className="avatar">RK</div>
-            <div>
-              <strong>Demo User</strong>
-              <span>demo@supersave.app</span>
+
+          <div
+            className="profile-row"
+            style={{ position: 'relative', cursor: 'pointer' }}
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+          >
+            <div className="avatar">{avatarInitials}</div>
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              <strong style={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                {displayName}
+              </strong>
+              <span style={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                {displayEmail}
+              </span>
             </div>
-            <span className="dots">•••</span>
+            <span className="dots" title="Account settings">•••</span>
+
+            {showProfileMenu && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  left: 0,
+                  right: 0,
+                  marginBottom: '8px',
+                  background: '#18181b',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '12px',
+                  padding: '6px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
+                  zIndex: 50,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {user ? (
+                  <button
+                    onClick={async () => {
+                      setShowProfileMenu(false);
+                      await signOut();
+                      router.push('/login');
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#f87171',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    Log out
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={() => setShowProfileMenu(false)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 12px',
+                      color: '#a855f7',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Log in / Sign up →
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </aside>

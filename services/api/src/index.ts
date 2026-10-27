@@ -45,6 +45,32 @@ const extractionLimiter = rateLimit({
 app.use(generalLimiter);
 app.use(express.json({ limit: '2mb' }));
 
+import { createClient } from '@supabase/supabase-js';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_PROJECT_URL;
+const SUPABASE_KEY =
+  process.env.SUPABASE_SECRET_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_PUBLIC_KEY;
+const authSupabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+// Supabase JWT authentication middleware
+app.use(async (req: Request, _res: Response, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ') && authSupabase) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const { data: { user } } = await authSupabase.auth.getUser(token);
+      if (user) {
+        (req as unknown as { user?: typeof user }).user = user;
+      }
+    } catch {
+      // invalid or expired token, proceed as guest
+    }
+  }
+  next();
+});
+
 const PORT = Number(process.env.API_PORT || 4000);
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
@@ -102,6 +128,7 @@ export type SummaryDetail = {
 
 export type Item = {
   id: string;
+  userId?: string;
   url: string;
   status: 'processing' | 'ready' | 'failed';
   createdAt: string;
@@ -315,9 +342,16 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'supersave-api' 
 
 app.get('/api/content', (req, res) => {
   const q = String(req.query.q || '').toLowerCase().trim();
-  const items = Array.from(store.values()).filter(
-    (item) => !q || `${item.title} ${item.summary} ${item.notes} ${(item.tags || []).join(' ')}`.toLowerCase().includes(q)
-  );
+  const user = (req as unknown as { user?: { id: string } }).user;
+  const userId = user?.id;
+
+  const items = Array.from(store.values()).filter((item) => {
+    // If user is authenticated, only return their items and demo seed items (no userId)
+    if (userId && item.userId && item.userId !== userId) {
+      return false;
+    }
+    return !q || `${item.title} ${item.summary} ${item.notes} ${(item.tags || []).join(' ')}`.toLowerCase().includes(q);
+  });
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   res.json({ items });
 });
@@ -436,8 +470,12 @@ app.post('/api/content', extractionLimiter, async (req: Request, res: Response) 
     // Timeout fallback
   }
 
+  const user = (req as unknown as { user?: { id: string } }).user;
+  const userId = user?.id;
+
   const item: Item = {
     id,
+    userId,
     url,
     status: 'processing',
     createdAt: new Date().toISOString(),

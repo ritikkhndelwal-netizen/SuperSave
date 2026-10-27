@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # 1. Python FastAPI AI Service (yt-dlp, ffmpeg, Gemini 3.5 Flash Lite)
+  ai-service:
+    build:
+      context: ./services/ai
+      dockerfile: Dockerfile
+    container_name: supersave-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
+    restart: unless-stopped
+
+  # 2. Express Node.js API Gateway (Auth verification, rate limiting, persistence sync)
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: supersave-api
+    ports:
+      - "4000:4000"
+    environment:
+      - API_PORT=4000
+      - AI_SERVICE_URL=http://ai-service:8000
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY}
+    depends_on:
+      - ai-service
+    restart: unless-stopped
