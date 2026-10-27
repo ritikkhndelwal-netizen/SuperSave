@@ -128,7 +128,11 @@ def extract_content(request: Request, body: ExtractRequest):
         if fast_meta.source != "Pinterest":
             try:
                 logger.info(f"Attempting media download for {url} in {mode} mode...")
-                media_path, temp_dir = MediaDownloader.download(url, mode=mode)
+                media_path, temp_dir, downloaded_thumb, downloaded_title = MediaDownloader.download(url, mode=mode)
+                if downloaded_thumb and (not fast_meta.thumbnail or not is_valid_media_image(fast_meta.thumbnail)):
+                    fast_meta.thumbnail = downloaded_thumb
+                if downloaded_title and (not fast_meta.title or "Saved from" in fast_meta.title or "Instagram Reel from" in fast_meta.title):
+                    fast_meta.title = downloaded_title
                 if media_path:
                     logger.info(f"Media downloaded to {media_path}. Sending to Gemini multimodal...")
                     ai_data = gemini.extract_from_media(media_path, url)

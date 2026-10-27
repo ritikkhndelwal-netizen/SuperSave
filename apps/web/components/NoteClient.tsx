@@ -42,6 +42,7 @@ export function NoteClient({ id, item: initialItem }: { id?: string; item?: Save
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [saveState, setSaveState] = useState('');
+  const notePollCountRef = useRef(0);
 
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -183,11 +184,28 @@ export function NoteClient({ id, item: initialItem }: { id?: string; item?: Save
     }
   };
 
-  // Live polling if the item is still processing
+  // Live polling if the item is still processing (capped to 25 attempts ~ 60s)
   useEffect(() => {
-    if (!item || item.status !== 'processing') return;
+    if (!item || item.status !== 'processing') {
+      notePollCountRef.current = 0;
+      return;
+    }
+
+    if (notePollCountRef.current >= 25) {
+      return;
+    }
 
     const interval = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+
+      notePollCountRef.current += 1;
+      if (notePollCountRef.current > 25) {
+        clearInterval(interval);
+        return;
+      }
+
       apiFetch(`/api/content/${item.id}`)
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((data: { item: SavedContent }) => {
@@ -271,26 +289,30 @@ export function NoteClient({ id, item: initialItem }: { id?: string; item?: Save
 
   if (fetching) {
     return (
-      <div style={{ padding: '80px 20px', textAlign: 'center', color: '#ba82ff' }}>
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
-            margin: '0 auto 16px',
-            background: 'linear-gradient(135deg, #ba82ff, #7444d7)',
-            display: 'grid',
-            placeItems: 'center',
-            fontSize: 24,
-            boxShadow: '0 8px 24px rgba(135, 82, 233, 0.4)',
-          }}
-        >
-          ⚡
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '24px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '28px' }}>
+          <div className="skeleton-line shimmer" style={{ width: '42px', height: '42px', borderRadius: '12px' }} />
+          <div style={{ flex: 1, display: 'grid', gap: '8px' }}>
+            <div className="skeleton-line shimmer" style={{ width: '55%', height: '24px' }} />
+            <div className="skeleton-line shimmer" style={{ width: '35%', height: '14px' }} />
+          </div>
+          <span className="syncing-indicator">
+            <span className="sync-spinner" />
+            Loading note...
+          </span>
         </div>
-        <h3 style={{ fontSize: 16, color: '#f3e8ff', margin: '0 0 6px' }}>Loading Knowledge Note…</h3>
-        <p style={{ fontSize: 12.5, color: '#a69cb0', margin: 0 }}>
-          Retrieving your multimodal analysis and code snippets…
-        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: '24px' }}>
+          <div style={{ display: 'grid', gap: '18px' }}>
+            <div className="skeleton-line shimmer" style={{ height: '360px', borderRadius: '16px' }} />
+            <div className="skeleton-line shimmer" style={{ height: '140px', borderRadius: '14px' }} />
+            <div className="skeleton-line shimmer" style={{ height: '180px', borderRadius: '14px' }} />
+          </div>
+          <div style={{ display: 'grid', gap: '16px', alignContent: 'start' }}>
+            <div className="skeleton-line shimmer" style={{ height: '160px', borderRadius: '14px' }} />
+            <div className="skeleton-line shimmer" style={{ height: '240px', borderRadius: '14px' }} />
+          </div>
+        </div>
       </div>
     );
   }

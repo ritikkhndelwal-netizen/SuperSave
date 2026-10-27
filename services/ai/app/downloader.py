@@ -11,11 +11,11 @@ class MediaDownloader:
     """Safely downloads video or audio from YouTube, Instagram, or supported platforms."""
 
     @staticmethod
-    def download(url: str, mode: str = "video_lowres") -> Tuple[Optional[str], Optional[str]]:
+    def download(url: str, mode: str = "video_lowres") -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
         """
         Downloads media to a unique temporary directory.
         Returns:
-            (filepath, temp_dir) or (None, None) if not a downloadable media url.
+            (filepath, temp_dir, thumbnail_url, title) or (None, None, None, None) if not a downloadable media url.
         """
         temp_dir = tempfile.mkdtemp(prefix="supersave_media_")
 
@@ -44,21 +44,23 @@ class MediaDownloader:
                 info = ydl.extract_info(url, download=True)
                 if not info:
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                    return None, None
+                    return None, None, None, None
 
                 # Find the downloaded file in temp_dir
                 files = os.listdir(temp_dir)
                 if not files:
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                    return None, None
+                    return None, None, None, None
 
                 filepath = os.path.join(temp_dir, files[0])
                 logger.info(f"Downloaded media: {filepath} ({os.path.getsize(filepath)} bytes)")
-                return filepath, temp_dir
+                thumb_url = info.get("thumbnail")
+                media_title = info.get("title")
+                return filepath, temp_dir, thumb_url, media_title
         except Exception as e:
             logger.warning(f"Could not download media from {url}: {e}")
             shutil.rmtree(temp_dir, ignore_errors=True)
-            return None, None
+            return None, None, None, None
 
     @staticmethod
     def cleanup(temp_dir: Optional[str]):

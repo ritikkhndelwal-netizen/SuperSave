@@ -713,3 +713,81 @@
   }
 }
 
+/* ========================================================================= */
+/* Shimmer Loading Animations & Skeleton UI */
+/* ========================================================================= */
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(25, 20, 36, 0.75) 0%,
+    rgba(56, 42, 80, 0.88) 50%,
+    rgba(25, 20, 36, 0.75) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.8s infinite ease-in-out;
+}
+
+.skeleton-card {
+  border: 1px solid var(--line);
+  background: #110f17;
+  border-radius: 15px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-thumb {
+  height: 188px;
+  width: 100%;
+}
+
+.skeleton-body {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-line {
+  border-radius: 6px;
+}
+
+.syncing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(147, 83, 238, 0.12);
+  border: 1px solid rgba(147, 83, 238, 0.28);
+  color: #c99bfb;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sync-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(201, 155, 251, 0.3);
+  border-top-color: #c99bfb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+

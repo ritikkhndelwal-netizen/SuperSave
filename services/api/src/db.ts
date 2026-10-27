@@ -5,7 +5,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Item } from './index';
 
 // Path to SQLite db file (local fallback & high-speed read cache)
-const DB_DIR = path.resolve(__dirname, '..', 'data');
+const DB_DIR = typeof __dirname !== 'undefined'
+  ? path.resolve(__dirname, '..', 'data')
+  : path.resolve(process.cwd(), 'services', 'api', 'data');
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }

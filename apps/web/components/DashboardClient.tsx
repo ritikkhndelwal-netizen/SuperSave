@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_USER_COLLECTIONS, generateAutoCollections } from '../lib/collections';
 import type { Collection, SavedContent } from '../lib/types';
 import { AppShell } from './AppShell';
@@ -11,6 +11,50 @@ import { EditContentModal } from './EditContentModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { useAuth } from '../lib/auth-context';
 import { apiFetch } from '../lib/api';
+
+function SkeletonCard() {
+  return (
+    <div className="skeleton-card" aria-hidden="true">
+      <div className="skeleton-thumb shimmer" />
+      <div className="skeleton-body">
+        <div className="skeleton-line shimmer" style={{ width: '35%', height: '11px' }} />
+        <div className="skeleton-line shimmer" style={{ width: '85%', height: '17px', margin: '4px 0' }} />
+        <div className="skeleton-line shimmer" style={{ width: '100%', height: '13px' }} />
+        <div className="skeleton-line shimmer" style={{ width: '65%', height: '13px' }} />
+        <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+          <div className="skeleton-line shimmer" style={{ width: '48px', height: '16px', borderRadius: '999px' }} />
+          <div className="skeleton-line shimmer" style={{ width: '58px', height: '16px', borderRadius: '999px' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonGrid({ count = 6 }: { count?: number }) {
+  return (
+    <div className="content-grid" aria-label="Loading library items...">
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} />
+      ))}
+    </div>
+  );
+}
+
+function getCardThumbnailBg(thumbnail?: string, source?: string) {
+  if (thumbnail) {
+    return `linear-gradient(180deg, rgba(13,7,20,.1), rgba(13,7,20,.85)), url(${thumbnail})`;
+  }
+  if (source === 'Instagram') {
+    return `radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%)`;
+  }
+  if (source === 'Pinterest') {
+    return `linear-gradient(135deg, #e60023, #ad081b)`;
+  }
+  if (source === 'YouTube') {
+    return `linear-gradient(135deg, #c4302b, #8b1814)`;
+  }
+  return undefined;
+}
 
 export function DashboardClient({ items: initialItems }: { items: SavedContent[] }) {
   const router = useRouter();
@@ -34,8 +78,11 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   // Navigation tab state: 'dashboard' | 'saved' | 'collections' | 'favorites'
   const [activeNavTab, setActiveNavTab] = useState<'dashboard' | 'saved' | 'collections' | 'favorites'>('dashboard');
 
-  // Core items
+  // Core items & loading states
   const [items, setItems] = useState<SavedContent[]>(initialItems);
+  const [isLoading, setIsLoading] = useState<boolean>(() => initialItems.length === 0);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const pollCountRef = useRef(0);
 
   // Search & Categories
   const [query, setQuery] = useState('');
@@ -108,9 +155,18 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
     window.history.pushState(null, '', newUrl);
   };
 
-  // Load preferences from localStorage
+  // Load preferences and cached items from localStorage
   useEffect(() => {
     try {
+      const savedItems = localStorage.getItem('supersave_cached_items');
+      if (savedItems) {
+        const parsed = JSON.parse(savedItems);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setItems(parsed);
+          setIsLoading(false);
+        }
+      }
+
       const savedMode = localStorage.getItem('supersave_extraction_mode');
       if (savedMode === 'audio_fast' || savedMode === 'video_lowres') {
         setExtractionMode(savedMode);
@@ -184,8 +240,14 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
 
       const deletedId = deletingItem.id;
 
-      // Optimistically remove from state
-      setItems((current) => current.filter((it) => it.id !== deletedId));
+      // Optimistically remove from state and cache
+      setItems((current) => {
+        const next = current.filter((it) => it.id !== deletedId);
+        try {
+          localStorage.setItem('supersave_cached_items', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
 
       // Remove from favorites
       setFavorites((prev) => {
@@ -247,33 +309,79 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
     return allCollections.find((c) => c.id === selectedCollectionId) || null;
   }, [selectedCollectionId, allCollections]);
 
-  // Initial fetch from API (Authenticated)
+  // Initial fetch from API (Authenticated background revalidation)
   useEffect(() => {
+    let isCancelled = false;
+    setIsSyncing(true);
+
     apiFetch('/api/content')
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then((data: { items: SavedContent[] }) => {
+        if (isCancelled) return;
         if (data && Array.isArray(data.items)) {
           setItems(data.items);
+          try {
+            localStorage.setItem('supersave_cached_items', JSON.stringify(data.items));
+          } catch {}
         }
       })
-      .catch(() => setItems(initialItems));
-  }, [initialItems, user]);
+      .catch(() => {
+        setItems((curr) => (curr.length === 0 ? initialItems : curr));
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoading(false);
+          setIsSyncing(false);
+        }
+      });
 
-  // Polling mechanism: If any item is in 'processing' status, poll every 3s until ready
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
+
+  // Polling mechanism: If any item is in 'processing' status, poll every 4s (capped to 12 attempts)
   useEffect(() => {
     const hasProcessing = items.some((item) => item.status === 'processing');
-    if (!hasProcessing) return;
+    if (!hasProcessing) {
+      pollCountRef.current = 0;
+      return;
+    }
+
+    if (pollCountRef.current >= 12) {
+      return;
+    }
 
     const interval = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+
+      pollCountRef.current += 1;
+      if (pollCountRef.current > 12) {
+        clearInterval(interval);
+        return;
+      }
+
       apiFetch('/api/content')
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((data: { items: SavedContent[] }) => {
-          if (data.items) {
-            setItems(data.items);
+          if (data && Array.isArray(data.items)) {
+            setItems((prev) => {
+              const prevStatus = prev.map((i) => `${i.id}:${i.status}`).join(',');
+              const newStatus = data.items.map((i) => `${i.id}:${i.status}`).join(',');
+              if (prevStatus !== newStatus || prev.length !== data.items.length) {
+                try {
+                  localStorage.setItem('supersave_cached_items', JSON.stringify(data.items));
+                } catch {}
+                return data.items;
+              }
+              return prev;
+            });
           }
         })
         .catch(() => {});
-    }, 3000);
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [items]);
@@ -291,14 +399,21 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
       if (!response.ok) throw new Error('Unable to save');
       const data = await response.json();
 
-      setItems((current) => [
-        {
-          ...data.item,
-          savedAt: 'Just now',
-          status: 'processing',
-        },
-        ...current.filter((i) => i.id !== data.item.id),
-      ]);
+      setItems((current) => {
+        const next = [
+          {
+            ...data.item,
+            savedAt: 'Just now',
+            status: 'processing',
+          },
+          ...current.filter((i) => i.id !== data.item.id),
+        ];
+        try {
+          localStorage.setItem('supersave_cached_items', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      pollCountRef.current = 0;
 
       setMessage(
         extractionMode === 'audio_fast'
@@ -580,16 +695,27 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
           </section>
 
           <section className="section-head">
-            <div>
-              <h2>Recently saved</h2>
-              <span>{dashboardFiltered.length} items</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div>
+                <h2>Recently saved</h2>
+                <span>{dashboardFiltered.length} items</span>
+              </div>
+              {isSyncing && (
+                <span className="syncing-indicator">
+                  <span className="sync-spinner" />
+                  Syncing library...
+                </span>
+              )}
             </div>
             <button className="text-button" onClick={() => handleTabChange('saved')}>
               Open full library →
             </button>
           </section>
 
-          <section className="content-grid">
+          {isLoading && items.length === 0 ? (
+            <SkeletonGrid count={6} />
+          ) : (
+            <section className="content-grid">
             {dashboardFiltered.map((item) => {
               const isFav = favorites.has(item.id);
               return (
@@ -617,11 +743,16 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                     <div
                       className="thumbnail"
                       style={{
-                        backgroundImage: item.thumbnail
-                          ? `linear-gradient(180deg, rgba(13,7,20,.1), rgba(13,7,20,.85)), url(${item.thumbnail})`
-                          : undefined,
+                        backgroundImage: getCardThumbnailBg(item.thumbnail, item.source),
                       }}
                     >
+                      {!item.thumbnail && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.85, pointerEvents: 'none' }}>
+                          <span style={{ fontSize: '30px' }}>
+                            {item.source === 'Instagram' ? '📸' : item.source === 'Pinterest' ? '📌' : item.source === 'YouTube' ? '▶️' : '🔖'}
+                          </span>
+                        </div>
+                      )}
                       <span className="source-pill">{item.source}</span>
                       {item.duration && <span className="duration-pill">{item.duration}</span>}
                       {item.status === 'processing' && (
@@ -649,6 +780,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
               );
             })}
           </section>
+        )}
 
           {searchMode === 'web' && query.trim() && (
             <section className="web-discovery-section">
@@ -799,10 +931,20 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
           </div>
 
           <div className="section-head" style={{ marginTop: '12px' }}>
-            <span>Showing {savedFiltered.length} items</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span>Showing {savedFiltered.length} items</span>
+              {isSyncing && (
+                <span className="syncing-indicator">
+                  <span className="sync-spinner" />
+                  Syncing library...
+                </span>
+              )}
+            </div>
           </div>
 
-          {savedFiltered.length === 0 ? (
+          {isLoading && items.length === 0 ? (
+            <SkeletonGrid count={6} />
+          ) : savedFiltered.length === 0 ? (
             <div className="empty-state-card">
               <span className="empty-icon">🔍</span>
               <h3>No items found</h3>
@@ -840,11 +982,16 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                       <div
                         className="thumbnail"
                         style={{
-                          backgroundImage: item.thumbnail
-                            ? `linear-gradient(180deg, rgba(13,7,20,.1), rgba(13,7,20,.85)), url(${item.thumbnail})`
-                            : undefined,
+                          backgroundImage: getCardThumbnailBg(item.thumbnail, item.source),
                         }}
                       >
+                        {!item.thumbnail && (
+                          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.85, pointerEvents: 'none' }}>
+                            <span style={{ fontSize: '30px' }}>
+                              {item.source === 'Instagram' ? '📸' : item.source === 'Pinterest' ? '📌' : item.source === 'YouTube' ? '▶️' : '🔖'}
+                            </span>
+                          </div>
+                        )}
                         <span className="source-pill">{item.source}</span>
                         {item.duration && <span className="duration-pill">{item.duration}</span>}
                       </div>
@@ -875,7 +1022,9 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                     <div
                       className="list-thumb"
                       style={{
-                        backgroundImage: item.thumbnail ? `url(${item.thumbnail})` : undefined,
+                        backgroundImage: item.thumbnail
+                          ? `url(${item.thumbnail})`
+                          : getCardThumbnailBg(undefined, item.source),
                       }}
                     />
                     <div className="list-info">
@@ -1288,13 +1437,23 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
           </div>
 
           <div className="section-head" style={{ marginTop: '16px' }}>
-            <div>
-              <h2>Starred items</h2>
-              <span>{favoritesFiltered.length} favorited</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div>
+                <h2>Starred items</h2>
+                <span>{favoritesFiltered.length} favorited</span>
+              </div>
+              {isSyncing && (
+                <span className="syncing-indicator">
+                  <span className="sync-spinner" />
+                  Syncing library...
+                </span>
+              )}
             </div>
           </div>
 
-          {favoritesFiltered.length === 0 ? (
+          {isLoading && items.length === 0 ? (
+            <SkeletonGrid count={3} />
+          ) : favoritesFiltered.length === 0 ? (
             <div className="empty-state-card">
               <span className="empty-icon">♡</span>
               <h3>No favorited items yet</h3>
@@ -1333,11 +1492,16 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
                       <div
                         className="thumbnail"
                         style={{
-                          backgroundImage: item.thumbnail
-                            ? `linear-gradient(180deg, rgba(13,7,20,.1), rgba(13,7,20,.85)), url(${item.thumbnail})`
-                            : undefined,
+                          backgroundImage: getCardThumbnailBg(item.thumbnail, item.source),
                         }}
                       >
+                        {!item.thumbnail && (
+                          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.85, pointerEvents: 'none' }}>
+                            <span style={{ fontSize: '30px' }}>
+                              {item.source === 'Instagram' ? '📸' : item.source === 'Pinterest' ? '📌' : item.source === 'YouTube' ? '▶️' : '🔖'}
+                            </span>
+                          </div>
+                        )}
                         <span className="source-pill">{item.source}</span>
                         {item.duration && <span className="duration-pill">{item.duration}</span>}
                       </div>
@@ -1547,9 +1711,13 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
           isOpen={Boolean(editingItem)}
           onClose={() => setEditingItem(null)}
           onSuccess={(updated) => {
-            setItems((current) =>
-              current.map((it) => (it.id === updated.id ? { ...it, ...updated } : it))
-            );
+            setItems((current) => {
+              const next = current.map((it) => (it.id === updated.id ? { ...it, ...updated } : it));
+              try {
+                localStorage.setItem('supersave_cached_items', JSON.stringify(next));
+              } catch {}
+              return next;
+            });
           }}
         />
       )}

@@ -341,6 +341,21 @@
                     thumbnail = pinImg.src;
                 }
             }
+            // Deep Instagram extraction if on Instagram
+            const isInstagram = window.location.hostname.includes('instagram.com') || (targetUrl && targetUrl.includes('instagram.com'));
+            if (isInstagram) {
+                const igImg = document.querySelector('article img[srcset], article img[src*="cdninstagram"], div[role="dialog"] img[src*="cdninstagram"], video[poster]');
+                if (igImg) {
+                    thumbnail = igImg.poster || igImg.src || thumbnail;
+                }
+                const captionEl = document.querySelector('article h1, article span[dir="auto"], div[role="dialog"] h1');
+                if (captionEl && captionEl.textContent?.trim()) {
+                    const cap = captionEl.textContent.trim().slice(0, 100);
+                    if (!title || title.includes('Instagram')) {
+                        title = cap;
+                    }
+                }
+            }
             return {
                 title: title.trim(),
                 description: description.trim(),
@@ -608,7 +623,16 @@
                 const link = article?.querySelector('a[href*="/p/"], a[href*="/reel/"]');
                 if (link?.href)
                     targetUrl = link.href;
-                saveTargetUrl(targetUrl, igPostBtn);
+                let articleThumb = '';
+                const img = article?.querySelector('img[srcset], img[src*="cdninstagram"], video[poster]');
+                if (img) {
+                    articleThumb = img.poster || img.src || '';
+                }
+                const caption = article?.querySelector('h1, span[dir="auto"]')?.textContent?.trim() || '';
+                saveTargetUrl(targetUrl, igPostBtn, {
+                    thumbnail: articleThumb,
+                    title: caption ? caption.slice(0, 90) : undefined,
+                });
             });
             section.appendChild(igPostBtn);
         });

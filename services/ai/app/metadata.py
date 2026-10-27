@@ -4,6 +4,7 @@ import re
 import urllib.parse
 import urllib.request
 import httpx
+import yt_dlp
 from typing import Tuple, Optional
 from .schemas import FastMetadataResponse
 
@@ -91,6 +92,26 @@ def fetch_youtube_oembed(url: str) -> Tuple[Optional[str], Optional[str], Option
             return data.get("title"), data.get("author_name"), data.get("thumbnail_url")
     except Exception:
         return None, None, None
+
+def fetch_instagram_metadata(url: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Fetch Instagram Reel or Post title, author, and high-res CDN thumbnail via fast metadata probe."""
+    try:
+        ydl_opts = {
+            "quiet": True,
+            "skip_download": True,
+            "noplaylist": True,
+            "socket_timeout": 6,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if info:
+                title = info.get("title") or (info.get("description") or "")[:80]
+                author = info.get("uploader") or info.get("channel") or "Instagram"
+                thumb = info.get("thumbnail")
+                return title, author, thumb
+    except Exception:
+        pass
+    return None, None, None
 
 def is_safe_remote_url(url: str) -> bool:
     """Verifies that the URL uses HTTP/HTTPS and does not target internal or link-local network addresses."""
@@ -191,7 +212,19 @@ def get_fast_metadata(url: str) -> FastMetadataResponse:
             embed_url=p_embed or embed_url
         )
 
-    # General / Instagram fallback
+    if source == "Instagram":
+        ig_title, ig_author, ig_thumb = fetch_instagram_metadata(url)
+        clean_title = ig_title or f"Instagram Reel from {domain}"
+        return FastMetadataResponse(
+            title=clean_title,
+            author=ig_author or "Instagram",
+            thumbnail=ig_thumb,
+            category="Social & Reels",
+            source=source,
+            embed_url=embed_url
+        )
+
+    # General fallback
     title, _desc, thumbnail = fetch_page_metadata(url)
     if not title:
         path = parsed.path.strip("/")
