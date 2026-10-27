@@ -4,10 +4,12 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch } from '../../lib/api';
+import { useAuth } from '../../lib/auth-context';
 
 function ShareTargetContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
 
   const [status, setStatus] = useState<'parsing' | 'saving' | 'success' | 'error'>('parsing');
   const [extractedUrl, setExtractedUrl] = useState<string>('');
@@ -15,6 +17,14 @@ function ShareTargetContent() {
   const [savedId, setSavedId] = useState<string>('');
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      setStatus('error');
+      setErrorMessage('Please log in to SuperSave first to save content to your personal library.');
+      return;
+    }
+
     const rawUrl = searchParams.get('url') || '';
     const rawText = searchParams.get('text') || '';
     const rawTitle = searchParams.get('title') || '';
@@ -31,7 +41,7 @@ function ShareTargetContent() {
       setStatus('error');
       setErrorMessage('No valid URL found in the shared content. Make sure to share a link from Instagram, YouTube, or browser.');
     }
-  }, [searchParams]);
+  }, [searchParams, user, authLoading]);
 
   async function saveContent(url: string, title?: string) {
     setStatus('saving');

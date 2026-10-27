@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_USER_COLLECTIONS, generateAutoCollections } from '../lib/collections';
 import type { Collection, SavedContent } from '../lib/types';
@@ -13,8 +13,16 @@ import { useAuth } from '../lib/auth-context';
 import { apiFetch } from '../lib/api';
 
 export function DashboardClient({ items: initialItems }: { items: SavedContent[] }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const { displayName } = useAuth();
+  const { user, loading, displayName } = useAuth();
+
+  // Auth gate: Redirect unauthenticated visitors to login
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/login');
+    }
+  }, [user, loading, router]);
 
   const timeGreeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -41,7 +49,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   const [extractionMode, setExtractionMode] = useState<'video_lowres' | 'audio_fast'>('video_lowres');
 
   // Favorites state
-  const [favorites, setFavorites] = useState<Set<string>>(new Set(['react-performance']));
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   // Automatic Collections state & toggle
   const [autoCollectionsEnabled, setAutoCollectionsEnabled] = useState<boolean>(true);
@@ -402,6 +410,23 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
     }
     return allCollections;
   }, [allCollections, collectionFilter]);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#09070f', color: '#ba82ff' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, margin: '0 auto 16px', background: 'linear-gradient(135deg, #ba82ff, #7444d7)', display: 'grid', placeItems: 'center', fontSize: 24, boxShadow: '0 8px 24px rgba(135, 82, 233, 0.4)' }}>
+            ⚡
+          </div>
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: 14, color: '#a69cb0', letterSpacing: '-0.01em' }}>Opening your knowledge vault…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <AppShell activeTab={activeNavTab} onTabChange={handleTabChange}>

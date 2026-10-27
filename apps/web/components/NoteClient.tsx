@@ -7,6 +7,7 @@ import { MarkdownView } from './MarkdownView';
 import { EditContentModal } from './EditContentModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { apiFetch } from '../lib/api';
+import { useAuth } from '../lib/auth-context';
 
 function resolveResourceUrl(reference?: string, name?: string): string {
   const ref = (reference || '').trim();
@@ -40,6 +41,13 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   const [saveState, setSaveState] = useState('');
 
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login');
+    }
+  }, [user, authLoading, router]);
 
   // Favorite state synced with localStorage
   const [isFav, setIsFav] = useState(false);
