@@ -44,10 +44,7 @@ services:
       - key: SUPABASE_SECRET_KEY
         sync: false
       - key: NEXT_PUBLIC_APP_URL
-        fromService:
-          type: web
-          name: supersave-web
-          property: url
+        sync: false
 
   # ----------------------------------------------------------------------------
   # 3. Next.js Web App & Android PWA (Public Web Service)
@@ -61,10 +58,7 @@ services:
     startCommand: npm --workspace apps/web run start
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: supersave-api
-          property: url
+        sync: false
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
