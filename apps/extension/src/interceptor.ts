@@ -12,7 +12,7 @@
     if (!text || typeof text !== 'string') return;
     const trimmed = text.trim();
     if (trimmed.length > 5 && (trimmed.includes('http://') || trimmed.includes('https://') || trimmed.includes('pin.it'))) {
-      window.postMessage({ type: 'SUPERSAVE_CLIPBOARD_WRITE', text: trimmed }, '*');
+      window.postMessage({ type: 'SUPERSAVE_CLIPBOARD_WRITE', text: trimmed }, window.location.origin);
     }
   }
 

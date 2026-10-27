@@ -51,15 +51,17 @@ function renderInline(text: string): React.ReactNode[] {
       );
     }
 
-    // Links: [label](url)
+    // Links: [label](url) - Sanitized against javascript: and data: XSS schemes
     const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (linkMatch) {
+      const rawHref = linkMatch[2].trim();
+      const isSafe = /^https?:\/\//i.test(rawHref) || /^mailto:/i.test(rawHref);
       return (
         <a
           key={index}
-          href={linkMatch[2]}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={isSafe ? rawHref : '#'}
+          target={isSafe ? '_blank' : undefined}
+          rel={isSafe ? 'noopener noreferrer' : undefined}
           className="md-link"
         >
           {linkMatch[1]}

@@ -6,6 +6,7 @@ import type { SavedContent } from '../lib/types';
 import { MarkdownView } from './MarkdownView';
 import { EditContentModal } from './EditContentModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { apiFetch } from '../lib/api';
 
 function resolveResourceUrl(reference?: string, name?: string): string {
   const ref = (reference || '').trim();
@@ -72,8 +73,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
 
   const handleConfirmDelete = async () => {
     try {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${api}/api/content/${item.id}`, {
+      const response = await apiFetch(`/api/content/${item.id}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete card');
@@ -142,8 +142,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
     if (item.status !== 'processing') return;
 
     const interval = window.setInterval(() => {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      fetch(`${api}/api/content/${item.id}`)
+      apiFetch(`/api/content/${item.id}`)
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((data: { item: SavedContent }) => {
           if (data.item) {
@@ -162,8 +161,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   async function savePersonalNote() {
     setSaveState('Saving…');
     try {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${api}/api/content/${item.id}/notes`, {
+      const response = await apiFetch(`/api/content/${item.id}/notes`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personalNote }),
@@ -182,8 +180,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
     setAnswer('');
     setQaSources([]);
     try {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${api}/api/content/${item.id}/qa`, {
+      const response = await apiFetch(`/api/content/${item.id}/qa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, search_mode: qaSearchMode }),
@@ -203,8 +200,7 @@ export function NoteClient({ item: initialItem }: { item: SavedContent }) {
   async function handleTranslate() {
     setTranslating(true);
     try {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${api}/api/content/${item.id}/translate`, {
+      const response = await apiFetch(`/api/content/${item.id}/translate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ language: selectedLang }),

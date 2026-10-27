@@ -10,6 +10,7 @@ import { CardActionMenu } from './CardActionMenu';
 import { EditContentModal } from './EditContentModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { useAuth } from '../lib/auth-context';
+import { apiFetch } from '../lib/api';
 
 export function DashboardClient({ items: initialItems }: { items: SavedContent[] }) {
   const searchParams = useSearchParams();
@@ -165,8 +166,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   const handleConfirmDelete = async () => {
     if (!deletingItem) return;
     try {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${api}/api/content/${deletingItem.id}`, {
+      const response = await apiFetch(`/api/content/${deletingItem.id}`, {
         method: 'DELETE',
       });
 
@@ -239,10 +239,9 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
     return allCollections.find((c) => c.id === selectedCollectionId) || null;
   }, [selectedCollectionId, allCollections]);
 
-  // Initial fetch from API
+  // Initial fetch from API (Authenticated)
   useEffect(() => {
-    const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    fetch(`${api}/api/content`)
+    apiFetch('/api/content')
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then((data: { items: SavedContent[] }) => {
         if (data.items && data.items.length) {
@@ -258,8 +257,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
     if (!hasProcessing) return;
 
     const interval = window.setInterval(() => {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      fetch(`${api}/api/content`)
+      apiFetch('/api/content')
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((data: { items: SavedContent[] }) => {
           if (data.items) {
@@ -276,8 +274,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
     if (!url.trim()) return;
     setMessage('Capturing metadata & starting Gemini multimodal analysis…');
     try {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${api}/api/content`, {
+      const response = await apiFetch('/api/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url.trim(), mode: extractionMode }),

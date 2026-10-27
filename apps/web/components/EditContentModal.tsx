@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { SavedContent } from '../lib/types';
+import { apiFetch } from '../lib/api';
 
 interface EditContentModalProps {
   item: SavedContent;
@@ -72,8 +73,7 @@ export function EditContentModal({
     setIsUpdating(true);
     setError(null);
     try {
-      const api = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${api}/api/content/${item.id}`, {
+      const response = await apiFetch(`/api/content/${item.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

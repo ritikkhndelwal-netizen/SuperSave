@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { apiFetch } from '../../lib/api';
 
 function ShareTargetContent() {
   const searchParams = useSearchParams();
@@ -35,8 +36,7 @@ function ShareTargetContent() {
   async function saveContent(url: string, title?: string) {
     setStatus('saving');
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const res = await fetch(`${apiUrl}/api/content`, {
+      const res = await apiFetch('/api/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

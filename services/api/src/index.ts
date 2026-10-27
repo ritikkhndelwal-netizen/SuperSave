@@ -25,6 +25,15 @@ app.use(
   })
 );
 
+// --- Security: Standard HTTP security headers ---
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // --- Security: Rate limiting ---
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -166,17 +175,26 @@ function isValidHttpUrl(urlString: string): boolean {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return false;
     }
+    // Only permit standard HTTP/HTTPS ports to prevent port scanning internal services
+    if (parsed.port && parsed.port !== '80' && parsed.port !== '443') {
+      return false;
+    }
     const hostname = parsed.hostname.toLowerCase();
+    // Block loopback, local, metadata, and private IP subnets (RFC 1918, RFC 6598, RFC 3927)
     if (
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
       hostname === '::1' ||
-      hostname === '169.254.169.254' ||
       hostname.startsWith('10.') ||
       hostname.startsWith('192.168.') ||
-      hostname.startsWith('172.16.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(hostname) ||
       hostname.endsWith('.internal') ||
-      hostname.endsWith('.local')
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.localhost') ||
+      /^[0-9]+$/.test(hostname)
     ) {
       return false;
     }
@@ -184,6 +202,31 @@ function isValidHttpUrl(urlString: string): boolean {
   } catch {
     return false;
   }
+}
+
+function checkItemOwnership(
+  item: Item,
+  req: Request,
+  allowDemoRead = false
+): { allowed: boolean; status?: number; error?: string } {
+  const user = (req as unknown as { user?: { id: string } }).user;
+  const userId = user?.id;
+
+  // Demo / public item (no userId assigned)
+  if (!item.userId) {
+    if (allowDemoRead) {
+      return { allowed: true };
+    }
+    // Prevent modifying or deleting demo items
+    return { allowed: false, status: 403, error: 'Demo items are read-only' };
+  }
+
+  // Personal item: requires authenticated user matching item.userId
+  if (!userId || item.userId !== userId) {
+    return { allowed: false, status: 403, error: 'Forbidden: You do not own this content' };
+  }
+
+  return { allowed: true };
 }
 
 function sourceFor(url: string): Item['source'] {
@@ -346,9 +389,17 @@ app.get('/api/content', (req, res) => {
   const userId = user?.id;
 
   const items = Array.from(store.values()).filter((item) => {
-    // If user is authenticated, only return their items and demo seed items (no userId)
-    if (userId && item.userId && item.userId !== userId) {
-      return false;
+    // Multi-tenant isolation:
+    // If authenticated: return user's own items + public demo items (where item.userId is null/undefined)
+    // If unauthenticated: ONLY return public demo items (where item.userId is null/undefined)
+    if (userId) {
+      if (item.userId && item.userId !== userId) {
+        return false;
+      }
+    } else {
+      if (item.userId) {
+        return false;
+      }
     }
     return !q || `${item.title} ${item.summary} ${item.notes} ${(item.tags || []).join(' ')}`.toLowerCase().includes(q);
   });
@@ -359,6 +410,8 @@ app.get('/api/content', (req, res) => {
 app.get('/api/content/:id', (req, res) => {
   const item = store.get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
+  const auth = checkItemOwnership(item, req, true);
+  if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
   return res.json({ item });
 });
 
@@ -505,6 +558,9 @@ app.post('/api/content/:id/retry', extractionLimiter, (req: Request, res: Respon
   const item = store.get(id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
 
+  const auth = checkItemOwnership(item, req, false);
+  if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
+
   item.status = 'processing';
   item.summary = 'Retrying Gemini multimodal extraction…';
   store.set(id, item);
@@ -517,6 +573,9 @@ app.patch('/api/content/:id', (req: Request, res: Response) => {
   const id = String(req.params.id);
   const item = store.get(id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
+
+  const auth = checkItemOwnership(item, req, false);
+  if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
 
   if (typeof req.body?.title === 'string' && req.body.title.trim()) {
     item.title = req.body.title.trim();
@@ -543,9 +602,14 @@ app.patch('/api/content/:id', (req: Request, res: Response) => {
 
 app.delete('/api/content/:id', (req: Request, res: Response) => {
   const id = String(req.params.id);
-  if (!store.has(id)) {
+  const item = store.get(id);
+  if (!item) {
     return res.status(404).json({ error: 'Content not found' });
   }
+
+  const auth = checkItemOwnership(item, req, false);
+  if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
+
   store.delete(id);
   return res.json({ ok: true, deletedId: id });
 });
@@ -553,6 +617,10 @@ app.delete('/api/content/:id', (req: Request, res: Response) => {
 app.patch('/api/content/:id/notes', (req, res) => {
   const item = store.get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
+
+  const auth = checkItemOwnership(item, req, false);
+  if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
+
   item.personalNote = String(req.body?.personalNote || '');
   store.set(item.id, item);
   return res.json({ item });
@@ -561,6 +629,10 @@ app.patch('/api/content/:id/notes', (req, res) => {
 app.post('/api/content/:id/qa', async (req, res) => {
   const item = store.get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
+
+  const auth = checkItemOwnership(item, req, true);
+  if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
+
   const question = String(req.body?.question || '').trim();
   const search_mode = req.body?.search_mode === 'note_and_web' ? 'note_and_web' : 'note_only';
   if (!question) return res.status(400).json({ error: 'question is required' });
@@ -584,6 +656,10 @@ app.post('/api/content/:id/qa', async (req, res) => {
 app.post('/api/content/:id/translate', async (req, res) => {
   const item = store.get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Content not found' });
+
+  const auth = checkItemOwnership(item, req, true);
+  if (!auth.allowed) return res.status(auth.status || 403).json({ error: auth.error });
+
   const targetLanguage = String(req.body?.language || 'Hindi').trim();
 
   try {

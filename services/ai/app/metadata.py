@@ -92,8 +92,36 @@ def fetch_youtube_oembed(url: str) -> Tuple[Optional[str], Optional[str], Option
     except Exception:
         return None, None, None
 
+def is_safe_remote_url(url: str) -> bool:
+    """Verifies that the URL uses HTTP/HTTPS and does not target internal or link-local network addresses."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            return False
+        if (
+            hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "169.254.169.254")
+            or hostname.startswith("10.")
+            or hostname.startswith("192.168.")
+            or re.match(r"^172\.(1[6-9]|2[0-9]|3[0-1])\.", hostname)
+            or re.match(r"^169\.254\.", hostname)
+            or hostname.endswith(".internal")
+            or hostname.endswith(".local")
+            or hostname.endswith(".localhost")
+            or hostname.isdigit()
+        ):
+            return False
+        return True
+    except Exception:
+        return False
+
 def fetch_page_metadata(url: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Fetch page title, description, and thumbnail from OpenGraph/HTML tags."""
+    if not is_safe_remote_url(url):
+        return None, None, None
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }

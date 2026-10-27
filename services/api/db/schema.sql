@@ -93,11 +93,11 @@ create policy "Users can insert own items"
 
 create policy "Users can update own items"
   on content_items for update
-  using (auth.uid() = user_id or user_id is null);
+  using (auth.uid() = user_id);
 
 create policy "Users can delete own items"
   on content_items for delete
-  using (auth.uid() = user_id or user_id is null);
+  using (auth.uid() = user_id);
 
 -- Policies for qa_messages
 create policy "Users can view own QA messages"
