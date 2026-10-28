@@ -13,16 +13,37 @@ import rateLimit from 'express-rate-limit';
 
 const app = express();
 
-// --- Security: Restrict CORS to known origins ---
-const ALLOWED_ORIGINS = [
-  process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-  'chrome-extension://*',  // Chrome extension popups
-];
+// Trust reverse proxies (Render, Cloudflare, local gateways) for proper req.ip detection in rate limiters
+app.set('trust proxy', 1);
+
+// --- Security: Restrict CORS to known origins and local network devices ---
+function isAllowedOrigin(origin: string): boolean {
+  if (!origin) return true;
+  // Chrome extensions
+  if (origin.startsWith('chrome-extension://')) return true;
+  // Localhost or 127.0.0.1 on any port
+  if (/^http:\/\/localhost(:\d+)?$/.test(origin) || /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
+    return true;
+  }
+  // Local network IPs for mobile testing (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+  if (/^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+    return true;
+  }
+  // Configured production domain or cloud hosts
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl && origin === appUrl.replace(/\/+$/, '')) {
+    return true;
+  }
+  if (origin.endsWith('.onrender.com') || origin.endsWith('.vercel.app')) {
+    return true;
+  }
+  return false;
+}
+
 app.use(
   cors({
     origin(origin, callback) {
-      // Allow server-to-server (no origin) and known origins
-      if (!origin || ALLOWED_ORIGINS.some((o) => o === origin || (o.includes('*') && origin?.startsWith(o.replace('*', ''))))) {
+      if (isAllowedOrigin(origin || '')) {
         return callback(null, true);
       }
       callback(new Error('Blocked by CORS'));
@@ -43,7 +64,7 @@ app.use((_req, res, next) => {
 // --- Security: Rate limiting ---
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,                  // 100 requests per window
+  max: 300,                  // 300 requests per window
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
@@ -51,10 +72,10 @@ const generalLimiter = rateLimit({
 
 const extractionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,                   // 10 extractions per 15 min (protects Gemini API credits)
+  max: 30,                   // 30 extractions per 15 min (protects against loops while allowing rapid reel saving)
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Extraction rate limit reached. Please wait before saving more content.' },
+  message: { error: 'Extraction rate limit reached. Please wait a few moments before saving more content.' },
 });
 
 app.use(generalLimiter);
@@ -420,8 +441,14 @@ function triggerExtraction(item: Item, clientMeta?: Record<string, unknown>) {
 }
 
 app.post('/api/content', extractionLimiter, async (req: Request, res: Response) => {
-  const url = String(req.body?.url || '').trim();
+  let url = String(req.body?.url || '').trim();
   const mode = (req.body?.mode === 'audio_fast' ? 'audio_fast' : 'video_lowres') as 'video_lowres' | 'audio_fast';
+
+  // Extract HTTP/HTTPS URL if surrounding text or caption is present (e.g. from mobile share)
+  const urlMatch = url.match(/https?:\/\/[^\s<>"'\)]+/i);
+  if (urlMatch) {
+    url = urlMatch[0];
+  }
 
   if (!url || !isValidHttpUrl(url)) {
     return res.status(400).json({ error: 'A valid public HTTP or HTTPS URL is required' });

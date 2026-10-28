@@ -1,6 +1,19 @@
 import { supabase } from './supabase';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const env = process.env.NEXT_PUBLIC_API_URL;
+    // If explicitly configured for a remote production deployment, use it
+    if (env && !env.includes('localhost') && !env.includes('127.0.0.1')) {
+      return env;
+    }
+    // In local development, dynamically use current hostname so mobile devices on the same Wi-Fi connect to the server
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:4000`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+}
 
 // In-flight request deduplication map to prevent redundant concurrent fetches
 const inFlightRequests = new Map<string, Promise<Response>>();
@@ -30,7 +43,8 @@ export function invalidateApiCache(pattern?: string) {
  * deduplicates concurrent requests, and caches recent responses.
  */
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const url = path.startsWith('http') ? path : `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  const apiBase = getApiBase();
+  const url = path.startsWith('http') ? path : `${apiBase}${path.startsWith('/') ? path : `/${path}`}`;
   const method = (options.method || 'GET').toUpperCase();
 
   // On mutations, clear cached responses immediately

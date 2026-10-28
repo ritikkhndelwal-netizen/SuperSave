@@ -389,7 +389,18 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   }, [items]);
 
   async function saveUrl() {
-    if (!url.trim()) return;
+    let cleanUrl = url.trim();
+    // Extract valid URL if surrounded by Instagram caption or extra text
+    const urlMatch = cleanUrl.match(/https?:\/\/[^\s<>"'\)]+/i);
+    if (urlMatch) {
+      cleanUrl = urlMatch[0];
+    }
+
+    if (!cleanUrl) {
+      setMessage('Please enter a valid Instagram, YouTube, or web link.');
+      return;
+    }
+
     if (credits && credits.remaining <= 0) {
       setMessage(`Monthly credit limit reached (${credits.used}/${credits.limit}). Resets in ${credits.daysLeft} days.`);
       return;
@@ -399,17 +410,22 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
       const response = await apiFetch('/api/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), mode: extractionMode }),
+        body: JSON.stringify({ url: cleanUrl, mode: extractionMode }),
       });
 
       if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
         if (response.status === 402) {
-          const errData = await response.json().catch(() => ({}));
           setMessage(errData.error || 'Monthly AI credit limit reached.');
           await refreshCredits();
           return;
         }
-        throw new Error('Unable to save');
+        if (response.status === 429) {
+          setMessage(errData.error || 'Rate limit reached. Please wait a few moments.');
+          return;
+        }
+        setMessage(errData.error || `Unable to save (Error ${response.status}).`);
+        return;
       }
       const data = await response.json();
       refreshCredits();
@@ -437,8 +453,9 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
       );
       setUrl('');
       setTimeout(() => setShowAdd(false), 1200);
-    } catch {
-      setMessage('Captured locally for demo. Connect the API to process live.');
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Network error';
+      setMessage(`Unable to connect: ${errMsg}. Ensure the server is running and reachable.`);
     }
   }
 
