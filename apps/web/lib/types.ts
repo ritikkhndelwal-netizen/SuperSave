@@ -96,3 +96,15 @@ export type SavedContent = {
   collectionIds?: string[];
 };
 
+export interface UserCredits {
+  userId: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  resetsAt: string;
+  daysLeft: number;
+  tier: 'free' | 'pro' | 'unlimited';
+  percentage: number;
+}
+
+

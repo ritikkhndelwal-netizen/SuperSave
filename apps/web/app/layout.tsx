@@ -23,12 +23,15 @@ export const viewport = {
 };
 
 import { AuthProvider } from '../lib/auth-context';
+import { CreditsProvider } from '../lib/credits-context';
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <CreditsProvider>{children}</CreditsProvider>
+        </AuthProvider>
       </body>
     </html>
   );

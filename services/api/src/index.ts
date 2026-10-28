@@ -1,4 +1,10 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'node:path';
+
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 import cors from 'cors';
 import express from 'express';
 import type { Request, Response } from 'express';
@@ -324,6 +330,30 @@ app.get('/api/content/:id', async (req, res) => {
   return res.json({ item });
 });
 
+app.get('/api/credits', async (req: Request, res: Response) => {
+  const user = (req as unknown as { user?: { id: string } }).user;
+  const userId = user?.id;
+
+  if (!userId) {
+    const now = new Date();
+    const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const daysLeft = Math.ceil((startOfNextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return res.json({
+      userId: 'demo',
+      used: 0,
+      limit: 30,
+      remaining: 30,
+      resetsAt: startOfNextMonth.toISOString(),
+      daysLeft,
+      tier: 'free',
+      percentage: 0,
+    });
+  }
+
+  const credits = await store.getUserCredits(userId);
+  return res.json(credits);
+});
+
 function triggerExtraction(item: Item, clientMeta?: Record<string, unknown>) {
   fetch(`${AI_SERVICE_URL}/extract`, {
     method: 'POST',
@@ -434,6 +464,18 @@ app.post('/api/content', extractionLimiter, async (req: Request, res: Response) 
 
   const user = (req as unknown as { user?: { id: string } }).user;
   const userId = user?.id;
+
+  // Monthly Credit Allowance check (30 saves / month)
+  if (userId) {
+    const credits = await store.getUserCredits(userId);
+    if (credits.remaining <= 0) {
+      return res.status(402).json({
+        error: `Monthly AI credit limit reached (${credits.used}/${credits.limit} used). Your allowance resets in ${credits.daysLeft} days.`,
+        code: 'CREDIT_LIMIT_REACHED',
+        credits,
+      });
+    }
+  }
 
   const item: Item = {
     id,

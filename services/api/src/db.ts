@@ -1,8 +1,14 @@
+import dotenv from 'dotenv';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Item } from './index';
+
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
 // Path to SQLite db file (local fallback & high-speed read cache)
 const DB_DIR = typeof __dirname !== 'undefined'
@@ -337,6 +343,71 @@ export class ContentDatabase {
     const row = stmt.get() as { count: number } | undefined;
     return row ? Number(row.count) : 0;
   }
+
+  async getUserCredits(userId: string): Promise<UserCredits> {
+    const now = new Date();
+    // 1st of current UTC month
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    // 1st of next UTC month
+    const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const daysLeft = Math.ceil((startOfNextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const limit = 30; // Free monthly allowance
+    let count = 0;
+
+    if (this.supabase && this.isSupabaseReady) {
+      try {
+        const { count: sbCount, error } = await this.supabase
+          .from('content_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .gte('created_at', startOfMonth);
+
+        if (!error && typeof sbCount === 'number') {
+          count = sbCount;
+        }
+      } catch (err) {
+        console.warn('[Database] Supabase credit count error:', err);
+      }
+    }
+
+    if (count === 0) {
+      // Fallback to local SQLite items created in current month
+      try {
+        const stmt = this.db.prepare(
+          "SELECT COUNT(*) as count FROM content_items WHERE (json_extract(data, '$.userId') = ? OR data LIKE ?) AND created_at >= ?"
+        );
+        const row = stmt.get(userId, `%"userId":"${userId}"%`, startOfMonth) as { count: number } | undefined;
+        if (row && row.count > 0) {
+          count = Number(row.count);
+        }
+      } catch {}
+    }
+
+    const remaining = Math.max(0, limit - count);
+    const percentage = Math.min(100, Math.round((count / limit) * 100));
+
+    return {
+      userId,
+      used: count,
+      limit,
+      remaining,
+      resetsAt: startOfNextMonth.toISOString(),
+      daysLeft,
+      tier: 'free',
+      percentage,
+    };
+  }
+}
+
+export interface UserCredits {
+  userId: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  resetsAt: string;
+  daysLeft: number;
+  tier: 'free' | 'pro' | 'unlimited';
+  percentage: number;
 }
 
 export const dbStore = new ContentDatabase();

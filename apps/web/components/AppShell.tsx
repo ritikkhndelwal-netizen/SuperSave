@@ -4,7 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
+import { useCredits } from '../lib/credits-context';
 import { InstallAppBanner } from './InstallAppBanner';
+import { CreditBarWidget } from './CreditBarWidget';
+import { CreditModal } from './CreditModal';
 
 export interface NavItem {
   id: 'dashboard' | 'saved' | 'collections' | 'favorites';
@@ -34,6 +37,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const { user, displayName, displayEmail, avatarInitials, signOut } = useAuth();
+  const { credits, setShowCreditsModal } = useCredits();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   return (
@@ -54,7 +58,32 @@ export function AppShell({
           <span style={{ fontSize: '16px' }}>SuperSave</span>
         </Link>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {credits && (
+            <button
+              type="button"
+              onClick={() => setShowCreditsModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 9px',
+                borderRadius: '999px',
+                background: credits.remaining === 0 ? 'rgba(239, 68, 68, 0.16)' : 'rgba(186, 130, 255, 0.12)',
+                border: credits.remaining === 0 ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(186, 130, 255, 0.25)',
+                color: credits.remaining === 0 ? '#fca5a5' : '#d8b4fe',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              aria-label="View AI Credit balance"
+              title="Monthly AI Credits"
+            >
+              <span>⚡</span>
+              <span>{credits.remaining} left</span>
+            </button>
+          )}
+
           {onSaveClick && (
             <button
               type="button"
@@ -195,6 +224,8 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-bottom">
+          <CreditBarWidget />
+
           <div className="extension-card">
             <div className="extension-icon">⌘</div>
             <div>
@@ -324,6 +355,9 @@ export function AppShell({
 
       {/* Mobile PWA Install App Popup */}
       <InstallAppBanner />
+
+      {/* Credit Details & Usage Modal */}
+      <CreditModal />
     </div>
   );
 }

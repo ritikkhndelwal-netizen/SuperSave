@@ -10,6 +10,7 @@ import { CardActionMenu } from './CardActionMenu';
 import { EditContentModal } from './EditContentModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { useAuth } from '../lib/auth-context';
+import { useCredits } from '../lib/credits-context';
 import { apiFetch } from '../lib/api';
 
 function SkeletonCard() {
@@ -60,6 +61,7 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, displayName } = useAuth();
+  const { credits, refreshCredits, setShowCreditsModal } = useCredits();
 
   // Auth gate: Redirect unauthenticated visitors to login
   useEffect(() => {
@@ -388,6 +390,10 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
 
   async function saveUrl() {
     if (!url.trim()) return;
+    if (credits && credits.remaining <= 0) {
+      setMessage(`Monthly credit limit reached (${credits.used}/${credits.limit}). Resets in ${credits.daysLeft} days.`);
+      return;
+    }
     setMessage('Capturing metadata & starting Gemini multimodal analysis…');
     try {
       const response = await apiFetch('/api/content', {
@@ -396,8 +402,17 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
         body: JSON.stringify({ url: url.trim(), mode: extractionMode }),
       });
 
-      if (!response.ok) throw new Error('Unable to save');
+      if (!response.ok) {
+        if (response.status === 402) {
+          const errData = await response.json().catch(() => ({}));
+          setMessage(errData.error || 'Monthly AI credit limit reached.');
+          await refreshCredits();
+          return;
+        }
+        throw new Error('Unable to save');
+      }
       const data = await response.json();
+      refreshCredits();
 
       setItems((current) => {
         const next = [
@@ -1574,8 +1589,42 @@ export function DashboardClient({ items: initialItems }: { items: SavedContent[]
               </div>
             </div>
 
-            <button className="primary-button wide" onClick={saveUrl}>
-              Save & Analyze with Gemini
+            {credits && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  margin: '14px 0 6px',
+                  fontSize: '11.5px',
+                  background: credits.remaining === 0 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(186, 130, 255, 0.08)',
+                  border: credits.remaining === 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(186, 130, 255, 0.2)',
+                  color: credits.remaining === 0 ? '#fca5a5' : '#d8b4fe',
+                }}
+              >
+                <span>⚡ 1 Save = 1 Credit</span>
+                <span
+                  onClick={() => setShowCreditsModal(true)}
+                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                  title="Click to view plan details"
+                >
+                  <strong>{credits.remaining}</strong> of {credits.limit} remaining this month →
+                </span>
+              </div>
+            )}
+
+            <button
+              className="primary-button wide"
+              onClick={saveUrl}
+              disabled={credits ? credits.remaining <= 0 : false}
+              style={{
+                opacity: credits && credits.remaining <= 0 ? 0.6 : 1,
+                cursor: credits && credits.remaining <= 0 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {credits && credits.remaining <= 0 ? 'Monthly Limit Reached' : 'Save & Analyze with Gemini'}
             </button>
             {message && <div className="status-message">{message}</div>}
             <div className="modal-tip">
